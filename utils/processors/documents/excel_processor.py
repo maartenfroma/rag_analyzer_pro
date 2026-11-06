@@ -1,0 +1,111 @@
+from base.base_document_processor import BaseDocProcessor
+import os
+import tempfile
+import pandas as pd
+
+from langchain_community.document_loaders import ExcelLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_chroma import Chroma     
+from langchain_core.documents import Document
+
+
+class ExcelProcessor(BaseDocProcessor):
+
+    def __init__(self, file_bytes, api_key: str, chunk_size: int=1000, 
+                 chunk_overlap: int=200):
+        self.file_bytes=file_bytes
+        self.api_key=api_key
+        self.chunk_size=chunk_size
+        self.chunk_overlap=chunk_overlap
+
+        self.temp_path:str=None | None
+        self.documents=None
+        self.chunks=None
+        self.vector_store=None
+
+    def load_file(self):
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
+                temp_file.write(self.file_bytes)
+                self.temp_path = temp_file.name
+        except Exception as e:
+            raise RuntimeError(f"Error loading Excel file: {e}")    
+
+    def extract_pages(self):
+        try:
+            loader = pd.ExcelFile(self.temp_path)
+            self.documents = []
+            
+            for sheet_name in loader.sheet_names:
+                self.documents.append((sheet_name, loader.parse(sheet_name)))
+        
+        except Exception as e:
+            raise RuntimeError(f"Error extracting pages from Excel file: {e}")      
+
+        return self.documents   
+
+    def split_documents(self):
+        try:
+            if not self.documents:
+                raise ValueError("No documents to split. Please extract pages first.")
+
+            # Initialize the text splitter for chunking the document text
+
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=self.chunk_size,
+                chunk_overlap=self.chunk_overlap
+            )
+            self.chunks = []
+
+            for doc in self.documents:
+                sheet_name, df = doc
+                text = df.to_csv(index=False)
+                for chunk in text_splitter.split_text(text):
+                    self.chunks.append(Document(page_content=chunk, metadata={
+                        "source": "excel",
+                        "table": sheet_name
+                    })) 
+
+        except Exception as e:
+            raise RuntimeError(f"Error splitting Excel documents: {e}")
+
+        #Return the list of chunks
+        return self.chunks
+
+    def create_vector_store(self):
+        try:
+            if not self.chunks:
+                raise ValueError("No chunks to create vector store. Please split documents first.")
+
+            embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
+                                                      google_api_key=self.api_key, 
+                                                      task_type="retrieval_document")
+            self.vector_store = Chroma.from_documents(self.chunks, embeddings)
+        except Exception as e:
+            raise RuntimeError(f"Error creating vector store from Excel chunks: {e}")
+
+        return self.vector_store
+
+    def process(self):
+        try:
+            os.environ["GOOGLE_API_KEY"] = self.api_key
+
+            self.load_file()
+            self.extract_pages()
+            self.split_documents()
+            self.create_vector_store()
+
+            return self.vector_store, len(self.chunks), len(self.documents)
+
+        except Exception as e:
+            raise RuntimeError(f"Error processing Excel file: {e}")
+
+        finally:
+            if self.temp_path and os.path.exists(self.temp_path):
+                os.remove(self.temp_path)
+
+    def __str__(self):
+        return super().__str__() + f" (temp_path={self.temp_path}, " \
+               f"documents={len(self.documents) if self.documents else 0}, " \
+               f"chunks={len(self.chunks) if self.chunks else 0})"  

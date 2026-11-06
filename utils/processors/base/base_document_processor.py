@@ -3,13 +3,25 @@ from abc import ABC, abstractmethod
 
 class BaseDocProcessor(ABC):
 
-    #Replace and strip
-    def clean_text(self, text: str):
+    # ABSTRACT METHODS FOR DOCUMENT PROCESSING
+    
+    @abstractmethod
+    def load_file(self):
+        pass
 
-        text = text.replace("\n", " ").replace("\n\n", "\n")
 
-        return text.strip()
+    @abstractmethod
+    def extract_pages(self):
+        pass
 
+    @abstractmethod
+    def split_documents(self):
+        pass
+
+    @abstractmethod
+    def create_vector_store(self):
+        pass
+   
     @abstractmethod
     def process(self):
         pass

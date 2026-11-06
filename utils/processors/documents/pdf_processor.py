@@ -7,6 +7,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from base.base_document_processor import BaseDocProcessor
+from langchain_core.documents import Document
 
 
 
@@ -38,27 +39,36 @@ class PdfProcessor(BaseDocProcessor):
 
         return self.temp_path
 
-    #EXTRACT PAGES FROM PDF
+    #EXTRACT PAGES FROM PDF 
     def extract_pages(self):
         loader = PyMuPDFLoader(self.temp_path)
         self.documents = loader.load()
 
+        #Return the extracted pages as a list of documents
         return self.documents
-
-    #Split documents into chunks
+    
+    #SPLIT DOCUMENTS INTO CHUNKS
     def split_documents(self):
+
         if not self.documents:
             raise ValueError("No documents to split. Please extract pages first.")
 
-        # Initialize the text splitter with the specified chunk size, overlap, and separators
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             separators=["\n\n", "\n", " ", ""]
-               )
-        self.chunks = text_splitter.split_documents(self.documents)
+          )
+
+        self.chunks = []
+        for doc in self.documents:
+            text = doc.page_content
+            for chunk in text_splitter.split_text(text):
+                self.chunks.append(Document(page_content=chunk, metadata={
+                    "source": "pdf"
+                }))     
         return self.chunks
 
+    
     #CREATE VECTOR STORE FROM CHUNKS
     def create_vector_store(self):
             if not self.chunks:
@@ -94,6 +104,9 @@ class PdfProcessor(BaseDocProcessor):
         finally:
             if self.temp_path and os.path.exists(self.temp_path):
                 os.remove(self.temp_path)
-    
 
+    def __str__(self):
+            return super().__str__() + f" (temp_path={self.temp_path}, " \
+                   f"documents={len(self.documents) if self.documents else 0}, " \
+                   f"chunks={len(self.chunks) if self.chunks else 0})"
     
