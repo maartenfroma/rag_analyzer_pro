@@ -8,10 +8,9 @@ load_dotenv()
 
 
 class GeminiAssistant:
-    """
-    Wrapper om via de officiële `google-genai` SDK antwoorden te genereren 
-    met ondersteuning voor model-fallbacks en Google Search Grounding.
-    """
+
+    # Klasse voor het beheren van een Gemini AI-assistent met 
+    # model-fallbacks en Google Search Grounding.
 
     MODELS_PREFERRED = [
     "gemini-3.8-flash",
@@ -42,28 +41,35 @@ class GeminiAssistant:
 
         self.model = self._select_model() 
 
+
     def _select_model(self) -> str:
-        """Selecteert het beste beschikbare model uit de API-lijst."""
+
+        #Select the best available model based on preferred models and flash models
         try:
+            #Get the list of available models from the Gemini API
             models_list = self.client.models.list()
 
+            # Extract model names from the API response
             available_models={m.name.replace("models/", "") for m in models_list}
 
-            # Print beschikbare Gemini-modellen
-            for m in sorted(available_models):
-                if m.startswith("gemini-"):
-                    print(f"Beschikbaar model: {m }")       
+            # Check if any preferred model is available
+            # Iterate over preferred models and return the first available one
 
             for preferred_model in self.MODELS_PREFERRED:
             
                 if preferred_model in available_models:
                     return preferred_model
 
+            
+            # If no preferred model is available, check for flash models
             flash_models = sorted([m for m in available_models 
                                    if "flash" in m.lower()], reverse=True)
+            
+            # Return the first available flash model if any
             if flash_models:
                 return flash_models[0]
-
+            
+            # If no flash model is available, return any available model
             if available_models:
                 return next(iter(available_models))
 
@@ -78,32 +84,24 @@ class GeminiAssistant:
         prompt_text: str, 
         enable_serp: bool = True
     ) -> Tuple[str, List[str]]:
-        """
-        Genereert een antwoord op basis van de opgegeven query en context.
-        
-        Returns:
-            Tuple[str, List[str]]: (antwoord_tekst, lijst_van_webbronnen)
-        """
+        #
+        # Validate input parameters
+        # Check if query and prompt_text are not empty
         if not query or not query.strip():
             raise ValueError("Query cannot be empty.")
 
         if not prompt_text or not prompt_text.strip():
             raise ValueError("Prompt context cannot be empty.")
 
-        # Stel het prompt samen
+        # Compose the full prompt with context and question
         full_prompt = f"""Context:
         {prompt_text}
 
          Question:{query}
          Answer:"""
 
-        print("\n" + "=" * 80)
-        print("PROMPT NAAR GEMINI")
-        print("=" * 80)
-        print(full_prompt[:5000])
-        print("=" * 80 + "\n")
 
-        # Configuratie opbouwen
+        # Build the configuration for content generation
         tools = [types.Tool(google_search=types.GoogleSearch())] if enable_serp else []
         
         config = types.GenerateContentConfig(
@@ -112,7 +110,7 @@ class GeminiAssistant:
             temperature=0.3 if not enable_serp else 0.7,
         )
 
-        # Stel fallbacks samen
+        # Prepare fallback models in case of errors or quota limits
         fallback_models = [self.model] + [
             m for m in self.MODELS_PREFERRED if m != self.model
         ]
@@ -120,7 +118,7 @@ class GeminiAssistant:
         response = None
         last_exception = None
 
-        # Probeer modellen achter elkaar bij fouten/quota limits
+        # Try models one by one in case of errors or quota limits
         for current_model in fallback_models:
             try:
                 response = self.client.models.generate_content(
@@ -132,16 +130,16 @@ class GeminiAssistant:
                 break
             except Exception as e:
                 last_exception = e
-                print(f"Fout bij model {current_model}: {e}. Probeer volgend model...")
+                print(f"Error {current_model}: {e}. Trying next model...")
 
         if not response:
-            raise RuntimeError(f"Kan geen antwoord genereren via Gemini API: {last_exception}")
+            raise RuntimeError(f"Cannot generate response via Gemini API: {last_exception}")
 
         answer = response.text or ""
         
         web_sources: List[str] = []
 
-        # Extraheer grounding bronnen (SERP)
+        # Extract grounding sources (SERP)
         if enable_serp and response.candidates:
             grounding_meta = getattr(response.candidates[0], "grounding_metadata", None)
             if grounding_meta and getattr(grounding_meta, "grounding_chunks", None):
@@ -165,9 +163,13 @@ class GeminiAssistant:
         enable_serp: bool = True
     ) -> tuple[str, list[str]]:
         '''
-        Vereenvoudigde interface om een vraag te stellen met context.
+        Simplified interface to ask a question with context.
          '''
         
         answer, sources = self.generate_response(query, context, enable_serp=enable_serp)
         
         return answer, sources
+
+    def __str__(self) -> str:
+        return f"GeminiAIAssistant(model={self.model})" 
+    
