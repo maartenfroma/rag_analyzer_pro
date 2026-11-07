@@ -1,7 +1,8 @@
 from base.base_document_processor import BaseDocProcessor
 from abc import abstractmethod
+from abc import ABC, abstractmethod
 
-class BaseMediaProcessor(BaseDocProcessor): 
+class BaseMediaProcessor(ABC): 
 
 
     @abstractmethod
@@ -10,17 +11,13 @@ class BaseMediaProcessor(BaseDocProcessor):
     
     
     @abstractmethod
-    def extract_pages(self):
+    def transcribe(self):
             pass
-    
+
     @abstractmethod
-    def split_documents(self):
-            pass
+    def create_documents(self):
+            pass        
     
-    @abstractmethod
-    def create_vector_store(self):
-            pass
-       
     @abstractmethod
     def process(self):
             pass
