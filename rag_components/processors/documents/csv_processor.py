@@ -1,8 +1,8 @@
-from base.base_document_processor import BaseDocProcessor
+
 import os
 import tempfile
-
 import pandas as pd
+from rag_components.processors.base.base_document_processor import BaseDocProcessor
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.documents import Document
@@ -17,7 +17,7 @@ class CsvProcessor(BaseDocProcessor):
         self.chunk_size=chunk_size
         self.chunk_overlap=chunk_overlap
 
-        self.temp_path:str=None | None
+        self.temp_path:str | None = None
         self.documents=None
         self.chunks=None
         self.vector_store=None

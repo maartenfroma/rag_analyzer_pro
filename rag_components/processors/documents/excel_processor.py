@@ -1,9 +1,8 @@
-from base.base_document_processor import BaseDocProcessor
+
 import os
 import tempfile
 import pandas as pd
-
-from langchain_community.document_loaders import ExcelLoader
+from rag_components.processors.base.base_document_processor import BaseDocProcessor
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma     
@@ -19,7 +18,7 @@ class ExcelProcessor(BaseDocProcessor):
         self.chunk_size=chunk_size
         self.chunk_overlap=chunk_overlap
 
-        self.temp_path:str=None | None
+        self.temp_path:str | None = None
         self.documents=None
         self.chunks=None
         self.vector_store=None
@@ -34,11 +33,11 @@ class ExcelProcessor(BaseDocProcessor):
 
     def extract_pages(self):
         try:
-            loader = pd.ExcelFile(self.temp_path)
+            loader = pd.read_excel(self.temp_path, sheet_name=None)
             self.documents = []
             
-            for sheet_name in loader.sheet_names:
-                self.documents.append((sheet_name, loader.parse(sheet_name)))
+            for sheet_name, df in loader.items():
+                self.documents.append((sheet_name, df))
         
         except Exception as e:
             raise RuntimeError(f"Error extracting pages from Excel file: {e}")      

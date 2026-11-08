@@ -9,7 +9,7 @@ from langchain_chroma import Chroma
 from faster_whisper import WhisperModel
 from moviepy import VideoFileClip
 
-from base.base_media_processor import BaseMediaProcessor
+from rag_components.processors.base.base_media_processor import BaseMediaProcessor
 
 class VideoProcessor(BaseMediaProcessor):
 

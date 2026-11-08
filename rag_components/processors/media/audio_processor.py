@@ -1,12 +1,13 @@
 
 import os
 import tempfile
+import pandas as pd
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from faster_whisper import WhisperModel
-from base.base_media_processor import BaseMediaProcessor
+from rag_components.processors.base.base_media_processor import BaseMediaProcessor
 
 class AudioProcessor(BaseMediaProcessor):
 

@@ -1,6 +1,6 @@
 from typing import Any
 from langchain_core.documents import Document
-from ai_assistants.gemini_ai_assistant import GeminiAssistant
+from rag_components.ai_assistants.gemini_ai_assistant import GeminiAssistant
 
 class RAGEngine:
 

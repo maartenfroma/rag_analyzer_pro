@@ -1,7 +1,7 @@
-from base.base_document_processor import BaseDocProcessor
+
 import os
 import tempfile
-
+from rag_components.processors.base.base_document_processor import BaseDocProcessor
 from langchain_community.document_loaders import UnstructuredPowerPointLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings

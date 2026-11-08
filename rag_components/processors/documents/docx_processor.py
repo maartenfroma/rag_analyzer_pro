@@ -1,11 +1,13 @@
 
 import os
-from base.base_document_processor import BaseDocProcessor
+from rag_components.processors.base.base_document_processor import BaseDocProcessor
 from langchain_community.document_loaders import Docx2txtLoader
 import tempfile
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
+
 
 class DocxProcessor(BaseDocProcessor):
 
@@ -16,11 +18,12 @@ class DocxProcessor(BaseDocProcessor):
         
         self.api_key = api_key
         self.file_bytes = file_bytes
-        self.temp_path = None
+        self.temp_path:str | None = None
         self.documents = None
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.chunks = None
+        self.vector_store = None
 
     #LOAD FILE
     def load_file(self):
@@ -51,7 +54,13 @@ class DocxProcessor(BaseDocProcessor):
             chunk_overlap=self.chunk_overlap,
             separators=["\n\n", "\n", " ", ""]
         )
-        self.chunks = text_splitter.split_documents(self.documents)
+        self.chunks = []
+        for doc in self.documents:
+            text = doc.page_content
+            for chunk in text_splitter.split_text(text):
+                self.chunks.append(Document(page_content=chunk, metadata={
+                    "source": "docx"
+                }))
 
         #Return the chunks as a list of documents
         return self.chunks
@@ -89,5 +98,6 @@ class DocxProcessor(BaseDocProcessor):
                 os.remove(self.temp_path)
 
     def __str__(self):
-        return f"DOCX Processor: {self.temp_path}, chunk_size= {self.chunk_size}, " \
-               f"chunk_overlap= {self.chunk_overlap}"
+                return super().__str__() + f" (temp_path={self.temp_path}, " \
+                       f"documents={len(self.documents) if self.documents else 0}, " \
+                       f"chunks={len(self.chunks) if self.chunks else 0})"

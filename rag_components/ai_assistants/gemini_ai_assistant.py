@@ -156,6 +156,7 @@ class GeminiAssistant:
         return answer, web_sources
     
 
+    #METHOD: Ask a question with context using the GeminiAssistant
     def ask_with_context(
         self, 
         query: str, 
@@ -167,7 +168,8 @@ class GeminiAssistant:
          '''
         
         answer, sources = self.generate_response(query, context, enable_serp=enable_serp)
-        
+
+        #Return the answer and sources retrieved from the GeminiAssistant
         return answer, sources
 
     def __str__(self) -> str:

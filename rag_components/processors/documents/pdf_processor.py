@@ -6,7 +6,7 @@ from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
-from base.base_document_processor import BaseDocProcessor
+from rag_components.processors.base.base_document_processor import BaseDocProcessor
 from langchain_core.documents import Document
 
 
