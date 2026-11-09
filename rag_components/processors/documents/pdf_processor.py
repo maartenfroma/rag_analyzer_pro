@@ -63,9 +63,10 @@ class PdfProcessor(BaseDocProcessor):
         for doc in self.documents:
             text = doc.page_content
             for chunk in text_splitter.split_text(text):
-                self.chunks.append(Document(page_content=chunk, metadata={
-                    "source": "pdf"
-                }))     
+                self.chunks.append(Document(page_content=chunk, 
+                                            metadata={**doc.metadata,
+                                                      "source": "pdf"
+                                            }))     
         return self.chunks
 
     
