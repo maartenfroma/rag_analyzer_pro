@@ -23,21 +23,42 @@ class RAGEngine:
 
     
     #Retrieve content from the vector store based on a query
-    def retrieve_content(self, query: str, k: int = 5) -> str:
+    def retrieve_content(
+        self,
+        query: str,
+        k: int = 10
+         ) -> str:
+
         if not self.vector_store:
-            raise ValueError("Vector store is not loaded.")
+            raise ValueError(
+                "Vector store is not loaded."
+            )
 
-        # Perform a similarity search in the vector store to retrieve relevant documents
-        documents: list[Document] = self.vector_store.similarity_search(query, k=k)
+        documents: list[Document] = (
+            self.vector_store.similarity_search(
+                query,
+                k=k
+            )
+        )
 
-        # Combine the retrieved documents into a single context string
-        context: str = "\n\n".join(doc.page_content for doc in documents)
+        for i, doc in enumerate(
+            documents,
+            start=1
+        ):
 
-       # Return the combined context string containing the retrieved documents
+            print(
+                f"\nChunk {i} ..."
+                f"{doc.page_content[:500]}"
+            )
+
+        context = "\n\n".join(
+            doc.page_content
+            for doc in documents
+        )
+
         return context
 
-
-    def ask(self, query: str, k: int = 5, enable_serp: bool = False) -> tuple[str, list[str]]:
+    def ask(self, query: str, k: int = 10, enable_serp: bool = False) -> tuple[str, list[str]]:
         # Ask a question to the RAG engine and get a response based on retrieved context
         # Retrieve the context from the vector store based on the query
         context: str = self.retrieve_content(query, k=k)

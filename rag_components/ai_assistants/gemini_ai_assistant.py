@@ -32,12 +32,30 @@ class GeminiAssistant:
 
         self.client = genai.Client(api_key=resolved_key)
         self.system_prompt = system_prompt or (
-            "You are a highly intelligent AI assistant that provides "
-            "accurate and concise answers "
-            "based on the provided context. "
-            "If the answer is not directly available, provide a cautious analysis based on the available information and clearly indicate"
-             "that it is an estimate."
-               )
+
+            "You are an expert document analysis assistant. "
+
+            "Answer only using the provided context. "
+
+            "Use all supplied context and combine information from all "
+            "retrieved passages before answering. "
+
+            "When information about a person, event, concept or topic appears "
+            "in multiple passages, merge that information into one coherent answer. "
+
+            "Provide detailed and comprehensive answers when sufficient "
+            "context is available. "
+
+            "Do not repeat the same information unnecessarily. "
+
+            "If the answer is not directly available in the context, "
+            "provide a cautious analysis based on the available information "
+            "and clearly state that it is an estimate. "
+
+            "Only say information is unavailable if it truly cannot be "
+            "derived from the supplied context."
+                  )
+                    
 
         self.model = self._select_model() 
 
@@ -108,6 +126,7 @@ class GeminiAssistant:
             system_instruction=self.system_prompt,
             tools=tools,
             temperature=0.3 if not enable_serp else 0.7,
+            max_output_tokens=2000,
         )
 
         # Prepare fallback models in case of errors or quota limits

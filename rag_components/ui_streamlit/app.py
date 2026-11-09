@@ -36,10 +36,6 @@ api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
     raise KeyError("Google API key is not set.")
 
-# Initialize the GeminiAssistant and RAGEngine
-assistant = GeminiAssistant()
-rag_engine = RAGEngine(assistant=assistant)
-
 # File uploader for various document and media types
 uploaded_file = st.file_uploader("Choose files", [".pdf", ".docx", ".csv",
                                                    ".xlsx", ".mp3", ".wav", 
@@ -69,34 +65,47 @@ if uploaded_file:
 
     # Process the uploaded file using the appropriate processor
     if processor:
-        with st.spinner("Document is being processed..."):
 
-            # Initialize a new GeminiAssistant and RAGEngine for processing the file    
-            assistant=GeminiAssistant()
-            engine = RAGEngine(assistant=assistant)
-            docs, chunks = (engine.load_processor(processor))
+        current_file = uploaded_file.name
 
-            st.success("Document processed successfully!")
-            st.write("Documents:", docs)
-            st.write("Chunks:", chunks) 
+        if (
+            "current_file" not in st.session_state
+            or st.session_state["current_file"] != current_file
+        ):
 
-            #
-            st.session_state["rag_engine"] = engine 
+            with st.spinner("Document is being processed..."):
 
-            if "rag_engine" in st.session_state:
-                question = st.text_input("Ask a question to the RAG engine:")
+                st.write(f"PROCESSING: {current_file}")
 
-                if st.button("Submit Question"):
-                    if question:
+                assistant = GeminiAssistant()
+                engine = RAGEngine(assistant=assistant)
+
+                docs, chunks = engine.load_processor(processor)
+
+                st.session_state["rag_engine"] = engine
+                st.session_state["current_file"] = current_file
+                st.session_state["docs"] = docs
+                st.session_state["chunks"] = chunks
+                st.success("Document processed successfully!")
+    
+        if "rag_engine" in st.session_state:
+
+            question = st.text_input("Ask a question to the RAG engine:")
+
+            if st.button("Submit Question"):
+                if question:
                         with st.spinner("Getting answer from RAG engine..."):
-                            answer, sources = st.session_state["rag_engine"].ask(question)
+                             
+                            answer, sources = st.session_state["rag_engine"].ask(question, k=10)
+
+
 
                             st.subheader("Answer")
                             st.write(answer)
                             st.subheader("Sources")
                             st.write(sources)
 
-
+ 
                 
 
 

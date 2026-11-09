@@ -18,7 +18,7 @@ class DocxProcessor(BaseDocProcessor):
         
         self.api_key = api_key
         self.file_bytes = file_bytes
-        self.temp_path:str | None = None
+        self.temp_path: str | None = None
         self.documents = None
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap

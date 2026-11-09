@@ -23,7 +23,7 @@ class PdfProcessor(BaseDocProcessor):
         self.chunk_overlap=chunk_overlap
 
         # Temporary path for the uploaded PDF file
-        self.temp_path:str=None | None
+        self.temp_path: str | None = None
         self.documents=None
         self.chunks=None
         self.vector_store=None
