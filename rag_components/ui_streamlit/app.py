@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 
+# Set up the root directory for the project and add it to the system path
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 if str(ROOT_DIR) not in sys.path:
@@ -14,20 +15,16 @@ import os
 
 from rag_components.ai_assistants.gemini_ai_assistant import GeminiAssistant
 from rag_components.core.rag_engine import RAGEngine
-from rag_components.processors.documents.pdf_processor import PdfProcessor
-from rag_components.processors.documents.docx_processor import DocxProcessor
-from rag_components.processors.documents.csv_processor import CsvProcessor
-from rag_components.processors.documents.excel_processor import ExcelProcessor
-from rag_components.processors.documents.pptx_processor import PPTXProcessor
-from rag_components.processors.media.audio_processor import AudioProcessor
-from rag_components.processors.media.video_processor import VideoProcessor
+from rag_components.factories.processor_factory import ProcessorFactory
 from dotenv import load_dotenv
 
-
+# Load environment variables from the .env file
 load_dotenv()
 
+#
 st.set_page_config(page_title="RAG Analyze Pro", layout="wide")
 
+#
 st.title("RAG Analyze Pro")
 
 
@@ -37,73 +34,86 @@ if not api_key:
     raise KeyError("Google API key is not set.")
 
 # File uploader for various document and media types
-uploaded_file = st.file_uploader("Choose files", [".pdf", ".docx", ".csv",
+uploaded_files = st.file_uploader("Choose files", [".pdf", ".docx", ".csv",
                                                    ".xlsx", ".mp3", ".wav", 
-                                                   ".pptx", ".mp4"])
+                                                   ".pptx", ".mp4"],
+                                                   accept_multiple_files=True)
 
-if uploaded_file:
+processors=[]
+
+# Check if any files have been uploaded and process them accordingly
+for uploaded_file in uploaded_files:
     extensions = "." + uploaded_file.name.split(".")[-1].lower()
 
-    file_bytes = uploaded_file.read()
 
-    processor=None
-
-    if extensions == ".pdf":
-        processor = PdfProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
-    elif extensions == ".docx":
-        processor = DocxProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
-    elif extensions == ".csv":
-        processor = CsvProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
-    elif extensions == ".xlsx":
-        processor = ExcelProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
-    elif extensions in [".mp3", ".wav"]:
-        processor = AudioProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
-    elif extensions == ".pptx":
-        processor = PPTXProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
-    elif extensions == ".mp4":
-        processor = VideoProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
-
-    # Process the uploaded file using the appropriate processor
-    if processor:
-
-        current_file = uploaded_file.name
-
-        if (
-            "current_file" not in st.session_state
-            or st.session_state["current_file"] != current_file
-        ):
-
-            with st.spinner("Document is being processed..."):
-
-                st.write(f"PROCESSING: {current_file}")
-
-                assistant = GeminiAssistant()
-                engine = RAGEngine(assistant=assistant)
-
-                docs, chunks = engine.load_processor(processor)
-
-                st.session_state["rag_engine"] = engine
-                st.session_state["current_file"] = current_file
-                st.session_state["docs"] = docs
-                st.session_state["chunks"] = chunks
-                st.success("Document processed successfully!")
-    
-        if "rag_engine" in st.session_state:
-
-            question = st.text_input("Ask a question to the RAG engine:")
-
-            if st.button("Submit Question"):
-                if question:
-                        with st.spinner("Getting answer from RAG engine..."):
-                             
-                            answer, sources = st.session_state["rag_engine"].ask(question, k=10)
+    try:
+        processors.append(ProcessorFactory.
+                         create_processor(file_bytes=uploaded_file.read(), 
+                                        file_name=uploaded_file.name, 
+                                        api_key=api_key))
+    except ValueError as e:
+        st.error(str(e))
 
 
+# Process the uploaded file using the appropriate processors
+if processors and len(processors) > 0:
 
-                            st.subheader("Answer")
-                            st.write(answer)
-                            st.subheader("Sources")
-                            st.write(sources)
+    current_file = uploaded_files[0].name
+
+    if (
+        "current_file" not in st.session_state
+        or st.session_state["current_file"] != current_file
+    ):
+
+        with st.spinner("Document is being processed..."):
+
+            st.write(f"PROCESSING: {current_file}")
+
+            # Initialize the Gemini assistant and RAG engine
+            assistant = GeminiAssistant()
+
+            # Create the RAG engine with the assistant
+            st.session_state["rag_engine"] = RAGEngine(assistant=assistant)
+
+            # Load the processors into the RAG engine and get the documents and chunks
+            docs, chunks = st.session_state["rag_engine"].load_processors(processors)
+
+            # Store the current file, documents, and chunks in the session state
+            st.session_state["current_file"] = current_file
+            st.session_state["docs"] = docs
+            st.session_state["chunks"] = chunks
+            st.success("Document processed successfully!")
+
+# Display the RAG engine interface if it has been initialized
+if "rag_engine" in st.session_state:
+
+    question = st.text_input("Ask a question to the RAG engine:")
+
+# Submit the question to the RAG engine when the button is clicked
+if st.button("Submit Question"):
+        if question:
+            with st.spinner("Getting answer from RAG engine..."):
+
+                # Ask the RAG engine the question and get the answer and sources
+                answer, sources = st.session_state["rag_engine"].ask(question, k=10)
+                chat_history = st.session_state["rag_engine"].get_chat_history()
+
+                for entry in chat_history:
+                    with st.chat_message("user"):
+                        st.write(f"Question: {entry['query']}")
+                    with st.chat_message("assistant"):
+                        st.write(f"Answer: {entry['response']}")
+
+                # Display the chat history below the answer and sources
+                st.subheader("Chat History")
+                for i, entry in enumerate(chat_history, start=1):
+                    st.write(f"Question{i}: {entry['query']}")
+                    st.write(f"Answer{i}: {entry['response']}")
+
+                # Button to clear the chat history
+                if st.button("Clear Chat History"):
+                    st.session_state["rag_engine"].clear_chat_history()
+                    st.experimental_rerun()
 
  
                 

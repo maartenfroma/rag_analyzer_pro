@@ -1,25 +1,48 @@
 from typing import Any
 from langchain_core.documents import Document
+from streamlit import context
 from rag_components.ai_assistants.gemini_ai_assistant import GeminiAssistant
+from langchain_chroma import Chroma
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 class RAGEngine:
 
     # Initialize the RAG engine with a GeminiAssistant instance and optional vector store
     def __init__(self, assistant: GeminiAssistant):
         self.assistant: GeminiAssistant = assistant
-        self.vector_store: Any | None = None
-        self.chat_history: list[tuple[str, str]] = []  # Stores (query, response) pairs
+        self.vector_stores: list=[]
+        # Stores (query, response) pairs
 
-    # Load a processor (e.g., vector store) into the RAG engine
-    def load_processor(self, processor: Any) -> tuple[int, int]:
+        # Initialize the chat history as a list of dictionaries
+        self.chat_history: list[dict] = []  
+        # Stores the vector store instance for retrieval
 
-        # Process the given processor to obtain the vector store, document count, and chunk count
-        vector_store, document_count, chunk_count = (processor.process())
+    # Load a processors (e.g., vector store) into the RAG engine
+    #Retrieve content from the vector store based on a query
+    def load_processors(self, processors: Any) -> tuple[int, int]:
 
-        self.vector_store = vector_store
 
-        # Store the vector store in the RAG engine instance
-        return document_count, chunk_count
+
+        self.vector_stores=[]
+        total_documents = 0
+        total_chunks = 0
+
+        for processor in processors:
+            if not processor:
+                continue
+            if not hasattr(processor, "process"):
+                continue    
+
+            vector_store, docs, chunks = processor.process()
+
+            self.vector_stores.append(vector_store)
+
+            total_documents+=docs
+            total_chunks+=chunks
+
+        
+        return total_documents, total_chunks
+
 
     
     #Retrieve content from the vector store based on a query
@@ -29,33 +52,37 @@ class RAGEngine:
         k: int = 10
          ) -> str:
 
-        if not self.vector_store:
+        if not self.vector_stores:
             raise ValueError(
                 "Vector store is not loaded."
             )
 
-        documents: list[Document] = (
-            self.vector_store.similarity_search(
-                query,
+        documents=[]
+        for vs in self.vector_stores:
+            docs=vs.similarity_search(
+                query=query,
                 k=k
             )
-        )
+            documents.extend(docs)
 
-        for i, doc in enumerate(
-            documents,
-            start=1
-        ):
+            unique_docs=[]
+            seen=set()
 
-            print(
-                f"\nChunk {i} ..."
-                f"{doc.page_content[:500]}"
-            )
+            context_parts=[]
+            for doc in documents:
+                if doc.page_content not in seen:
+                    unique_docs.append(doc)
+                    seen.add(doc.page_content)
 
-        context = "\n\n".join(
-            doc.page_content
-            for doc in documents
-        )
+                    source=doc.metadata.get("source_file", "unknown")
+                    page=doc.metadata.get("page", "?")
+                    context_parts.append(f"Document: {source} | Page: {page}\n"
+                                         f"{doc.page_content}"
+                    )
+        
 
+        context = "\n\n".join(context_parts)
+        
         return context
 
     def ask(self, query: str, k: int = 10, enable_serp: bool = False) -> tuple[str, list[str]]:
@@ -66,21 +93,25 @@ class RAGEngine:
         answer, sources = self.assistant.ask_with_context(query=query, context=context, enable_serp=enable_serp)
 
         # Append the query, answer, sources, and context to the chat history for reference
-        self.chat_history.append((query, answer))
+        self.chat_history.append({"query": query, "response": answer})
+        # Append the query and answer to the chat history
         
 
         # Return the answer and sources as a tuple for further processing or display
         return answer, sources
 
-
-    def get_chat_history(self) -> list[tuple[str, str]]:
+    # Get the chat history containing all queries and responses
+    #Return the chat history as a list of dictionaries with query 
+    # and response keys
+    
+    def get_chat_history(self) -> list[dict]:
         # Return the chat history containing all queries, answers, sources, and contexts
         return self.chat_history
-
+    
     def clear_chat_history(self) -> None:
         # Clear the chat history to start a new conversation
         self.chat_history.clear()
 
     def __str__(self) -> str:
         # Return a string representation of the RAG engine, including chat history
-        return "\n".join([f"Query: {q}\nResponse: {r}" for q, r in self.chat_history])
+        return "\n".join([f"Query: {entry['query']}\nResponse: {entry['response']}" for entry in self.chat_history])
