@@ -1,6 +1,7 @@
 
 import os
 import tempfile
+from pathlib import Path
 import pandas as pd
 from rag_components.processors.base.base_document_processor import BaseDocProcessor
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -10,10 +11,12 @@ from langchain_chroma import Chroma
 
 class CsvProcessor(BaseDocProcessor):
 
-    def __init__(self, file_bytes, api_key: str, chunk_size: int=1000, 
+    
+    def __init__(self, file_bytes, api_key: str, file_name: str, chunk_size: int=1000, 
                  chunk_overlap: int=200):
         self.file_bytes=file_bytes
         self.api_key=api_key
+        self.file_name=file_name
         self.chunk_size=chunk_size
         self.chunk_overlap=chunk_overlap
 
@@ -22,9 +25,14 @@ class CsvProcessor(BaseDocProcessor):
         self.chunks=None
         self.vector_store=None
 
+        self.DB_PATH = os.path.join(
+         "chroma_db",
+        Path(self.file_name).stem
+)
+
     def load_file(self):
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
                 temp_file.write(self.file_bytes)
                 self.temp_path = temp_file.name
         except Exception as e:
@@ -63,19 +71,41 @@ class CsvProcessor(BaseDocProcessor):
         return self.chunks
 
     def create_vector_store(self):
+
         try:
+
+            # Check if there are any chunks to create the vector store from
             if not self.chunks:
                 raise ValueError("No chunks to create vector store. Please split documents first.")
-        
+
             embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
-                                                      google_api_key=self.api_key, 
-                                                      task_type="retrieval_document")
-            self.vector_store = Chroma.from_documents(self.chunks, embeddings)
+                                                          google_api_key=self.api_key, 
+                                                          task_type="retrieval_document",
+                                                          )
+            # Define the path to the Chroma database file
+            db_file=os.path.join(self.DB_PATH, "chroma.sqlite3")
+
+            # Check if the Chroma database file exists
+            if os.path.exists(db_file):
+                print("Vector store already exists. Loading existing store.")
+                self.vector_store = Chroma(persist_directory=self.DB_PATH,
+                                            embedding_function=embeddings)
+                return self.vector_store
+            
+            # If the Chroma database file does not exist, create a new vector store
+            else:
+                print(
+                    f"Creating new vector store {self.DB_PATH}.")
+                os.makedirs(self.DB_PATH, exist_ok=True)
+                self.vector_store = Chroma.from_documents(documents=self.chunks, embedding=embeddings,
+                                                            persist_directory=self.DB_PATH)
+                return self.vector_store
+            
         except Exception as e:
-            raise RuntimeError(f"Error creating vector store from CSV chunks: {e}")
+                raise RuntimeError(f"Error creating vector store from CSV chunks: {e}")
+            
 
-        return self.vector_store    
-
+           
     def process(self):
         try:
             os.environ["GOOGLE_API_KEY"] = self.api_key

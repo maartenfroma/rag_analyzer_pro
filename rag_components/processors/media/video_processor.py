@@ -1,5 +1,6 @@
 import os
 import tempfile
+from pathlib import Path
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -13,7 +14,7 @@ from rag_components.processors.base.base_media_processor import BaseMediaProcess
 
 class VideoProcessor(BaseMediaProcessor):
 
-    def __init__(self, file_bytes: bytes, api_key:str, model_size="small", 
+    def __init__(self, file_bytes: bytes, api_key:str, file_name: str, model_size="small", 
                  chunk_size=1000, chunk_overlap=200):
         
         self.temp_file = None
@@ -28,12 +29,16 @@ class VideoProcessor(BaseMediaProcessor):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.documents = []     
+        self.file_name = file_name
+        self.DB_PATH = os.path.join(
+                 "chroma.sqlite3",
+                Path(self.file_name).stem)
 
     # Load the video file from the given path or from the temporary file if no path is provided
     # file_path: Path to the video file. If None, the temporary file will be used.
 
     def load_file(self, file_path=None):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
             temp_file.write(self.file_bytes)
             temp_file.flush()
             self.video_path = temp_file.name
@@ -128,10 +133,19 @@ class VideoProcessor(BaseMediaProcessor):
             task_type="retrieval_document"
         )
 
-        self.vector_store = Chroma.from_documents(
-            self.chunks,
-            embeddings
-        )
+        if os.path.exists(self.DB_PATH):
+            print("Loading existing database file:", self.DB_PATH)
+            self.vector_store = Chroma(
+             persist_directory=self.DB_PATH,
+             embedding_function=embeddings,
+              )
+        else:
+            print("Creating new database file:", self.DB_PATH)
+            self.vector_store = Chroma.from_documents(
+                documents=self.chunks,
+                embedding=embeddings,
+                persist_directory=self.DB_PATH
+            )
         return self.vector_store
 
     # Process the video file: load, transcribe, create documents, split, and create vector store

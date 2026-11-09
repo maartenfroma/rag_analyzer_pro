@@ -1,6 +1,7 @@
 
 import os
 import tempfile
+from pathlib import Path
 
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -14,9 +15,9 @@ from langchain_core.documents import Document
 class PdfProcessor(BaseDocProcessor):
 
     #INITIALISEER PROJECT 
-    def __init__(self, file_bytes, api_key: str, chunk_size: int=1000, 
+    def __init__(self, file_bytes, api_key: str, file_name: str, chunk_size: int=1000, 
                  chunk_overlap: int=200):
-        
+        self.file_name=file_name
         self.file_bytes=file_bytes
         self.api_key=api_key
         self.chunk_size=chunk_size
@@ -29,7 +30,10 @@ class PdfProcessor(BaseDocProcessor):
         self.vector_store=None
 
 
-        
+        self.DB_PATH = os.path.join(
+            "chroma_db",
+            Path(self.file_name).stem
+        )
     #LOAD FILE
     def load_file(self):
         
@@ -72,17 +76,36 @@ class PdfProcessor(BaseDocProcessor):
     
     #CREATE VECTOR STORE FROM CHUNKS
     def create_vector_store(self):
-            if not self.chunks:
-                raise ValueError("No chunks to create vector store from. Please split documents first.")
-    
-            embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
-                                        google_api_key=self.api_key, 
-                                        task_type="retrieval_document")
-            
-            self.vector_store = Chroma.from_documents(self.chunks, 
-                                                      embeddings)
-            return self.vector_store
 
+        try:
+
+            # Check if there are any chunks to create the vector store from
+            if not self.chunks:
+                raise ValueError("No chunks to create vector store. Please split documents first.")
+
+            embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
+                                                          google_api_key=self.api_key, 
+                                                          task_type="retrieval_document",
+                                                          )
+            
+            # Check if the Chroma database file exists
+            if os.path.exists(self.DB_PATH):
+                print("Vector store already exists. Loading existing store.")
+                self.vector_store = Chroma(persist_directory=self.DB_PATH,
+                                            embedding_function=embeddings)
+                return self.vector_store
+            
+            # If the Chroma database file does not exist, create a new vector store
+            else:
+                print(
+                    f"Creating new vector store {self.DB_PATH}.")
+                os.makedirs(self.DB_PATH, exist_ok=True)
+                self.vector_store = Chroma.from_documents(documents=self.chunks, embedding=embeddings,
+                                                            persist_directory=self.DB_PATH)
+                return self.vector_store
+            
+        except Exception as e:
+                raise RuntimeError(f"Error creating vector store from PDF chunks: {e}")
     
     #PROCESS THE PDF FILE
     def process(self):

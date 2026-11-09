@@ -1,6 +1,7 @@
 
 import os
 import tempfile
+from pathlib import Path
 from rag_components.processors.base.base_document_processor import BaseDocProcessor
 from langchain_community.document_loaders import UnstructuredPowerPointLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -12,7 +13,7 @@ from langchain_core.documents import Document
 
 class PPTXProcessor(BaseDocProcessor):  
 
-    def __init__(self, file_bytes, api_key: str, chunk_size: int=1000, 
+    def __init__(self, file_bytes, api_key: str, file_name: str, chunk_size: int=1000, 
                  chunk_overlap: int=200):
         self.file_bytes=file_bytes
         self.api_key=api_key
@@ -24,6 +25,13 @@ class PPTXProcessor(BaseDocProcessor):
         self.documents=None
         self.chunks=None
         self.vector_store=None
+
+        self.file_name=file_name
+
+        self.DB_PATH = os.path.join(
+            "chroma_db",
+            Path(self.file_name).stem
+        )
 
     def load_file(self):
         try:
@@ -72,11 +80,23 @@ class PPTXProcessor(BaseDocProcessor):
             embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
                                                       google_api_key=self.api_key, 
                                                       task_type="retrieval_document")
-            self.vector_store = Chroma.from_documents(self.chunks, embeddings)
+            if os.path.exists(self.DB_PATH):
+                print("Loading existing database file:", self.DB_PATH)
+                self.vector_store = Chroma(
+                    persist_directory=self.DB_PATH,
+                    embedding_function=embeddings,
+                )
+            else:
+                print("Creating new database file:", self.DB_PATH)
+                self.vector_store = Chroma.from_documents(
+                    documents=self.chunks,
+                    embedding=embeddings,
+                    persist_directory=self.DB_PATH
+                )
         except Exception as e:
             raise RuntimeError(f"Error creating vector store from PPTX chunks: {e}")
 
-        return self.vector_store
+        return self.vector_store    
 
     def process(self):
         try:

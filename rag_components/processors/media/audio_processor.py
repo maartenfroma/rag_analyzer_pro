@@ -1,6 +1,7 @@
 
 import os
 import tempfile
+from pathlib import Path
 import pandas as pd
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -18,7 +19,7 @@ class AudioProcessor(BaseMediaProcessor):
     # chunk_size: Size of text chunks for splitting the transcript
     # chunk_overlap: Overlap between text chunks
 
-    def __init__(self, file_bytes: bytes, api_key:str, model_size="small", 
+    def __init__(self, file_bytes: bytes, api_key:str, file_name: str, model_size="small", 
                  chunk_size=1000, chunk_overlap=200):
         
         self.temp_file = None
@@ -27,17 +28,23 @@ class AudioProcessor(BaseMediaProcessor):
         self.chunks = None
         self.vector_store = None    
         self.file_bytes = file_bytes
+        self.file_name = file_name
         self.file_path = None
         self.api_key = api_key
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.documents = []
+        self.DB_PATH = os.path.join(
+                    "chroma_db",
+                    Path(self.file_name).stem
+                )
+        
 
     # Load the audio file from the given path or from the temporary file if no path is provided
     # file_path: Path to the audio file. If None, the temporary file will be used.
 
     def load_file(self, file_path=None):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
             temp_file.write(self.file_bytes)
             temp_file.flush()
             self.file_path = temp_file.name
@@ -109,11 +116,20 @@ class AudioProcessor(BaseMediaProcessor):
         task_type="retrieval_document"
         )
 
-        self.vector_store=Chroma.from_documents(
-            self.chunks,
-            embeddings
-        )
-        return self.vector_store    
+        if os.path.exists(self.DB_PATH):
+            print("Loading existing database file:", self.DB_PATH)
+            self.vector_store = Chroma(
+                persist_directory=self.DB_PATH,
+                embedding_function=embeddings,
+            )
+        else:
+            print("Creating new database file:", self.DB_PATH)
+            self.vector_store = Chroma.from_documents(
+                documents=self.chunks,
+                embedding=embeddings,
+                persist_directory=self.DB_PATH
+            )
+        return self.vector_store
     
     def process(self):
 

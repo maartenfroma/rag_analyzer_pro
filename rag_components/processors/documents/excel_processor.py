@@ -7,14 +7,16 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma     
 from langchain_core.documents import Document
+from pathlib import Path
 
 
 class ExcelProcessor(BaseDocProcessor):
 
-    def __init__(self, file_bytes, api_key: str, chunk_size: int=1000, 
+    def __init__(self, file_bytes, api_key: str, file_name: str, chunk_size: int=1000, 
                  chunk_overlap: int=200):
         self.file_bytes=file_bytes
         self.api_key=api_key
+        self.file_name=file_name
         self.chunk_size=chunk_size
         self.chunk_overlap=chunk_overlap
 
@@ -22,10 +24,14 @@ class ExcelProcessor(BaseDocProcessor):
         self.documents=None
         self.chunks=None
         self.vector_store=None
+        self.DB_PATH = os.path.join(
+            "chroma_db",
+            Path(self.file_name).stem
+        )
 
     def load_file(self):
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
                 temp_file.write(self.file_bytes)
                 self.temp_path = temp_file.name
         except Exception as e:
@@ -73,14 +79,30 @@ class ExcelProcessor(BaseDocProcessor):
         return self.chunks
 
     def create_vector_store(self):
+
         try:
+
+            # Check if there are any chunks to create the vector store from
             if not self.chunks:
                 raise ValueError("No chunks to create vector store. Please split documents first.")
 
             embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
-                                                      google_api_key=self.api_key, 
-                                                      task_type="retrieval_document")
-            self.vector_store = Chroma.from_documents(self.chunks, embeddings)
+                                                          google_api_key=self.api_key, 
+                                                          task_type="retrieval_document",
+                                                          )
+            if os.path.exists(self.DB_PATH):
+                print("Loading existing database file:", self.DB_PATH)
+                self.vector_store = Chroma(
+                    persist_directory=self.DB_PATH,
+                    embedding_function=embeddings,
+                )
+            else:
+                print("Creating new database file:", self.DB_PATH)
+                self.vector_store = Chroma.from_documents(
+                    documents=self.chunks,
+                    embedding=embeddings,
+                    persist_directory=self.DB_PATH
+                )
         except Exception as e:
             raise RuntimeError(f"Error creating vector store from Excel chunks: {e}")
 

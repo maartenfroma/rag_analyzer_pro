@@ -49,19 +49,19 @@ if uploaded_file:
     processor=None
 
     if extensions == ".pdf":
-        processor = PdfProcessor(file_bytes=file_bytes, api_key=api_key)
+        processor = PdfProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
     elif extensions == ".docx":
-        processor = DocxProcessor(file_bytes=file_bytes, api_key=api_key)
+        processor = DocxProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
     elif extensions == ".csv":
-        processor = CsvProcessor(file_bytes=file_bytes, api_key=api_key)
+        processor = CsvProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
     elif extensions == ".xlsx":
-        processor = ExcelProcessor(file_bytes=file_bytes, api_key=api_key)
+        processor = ExcelProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
     elif extensions in [".mp3", ".wav"]:
-        processor = AudioProcessor(file_bytes=file_bytes, api_key=api_key)
+        processor = AudioProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
     elif extensions == ".pptx":
-        processor = PPTXProcessor(file_bytes=file_bytes, api_key=api_key)
+        processor = PPTXProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
     elif extensions == ".mp4":
-        processor = VideoProcessor(file_bytes=file_bytes, api_key=api_key)
+        processor = VideoProcessor(file_bytes=file_bytes, file_name=uploaded_file.name, api_key=api_key)
 
     # Process the uploaded file using the appropriate processor
     if processor:
