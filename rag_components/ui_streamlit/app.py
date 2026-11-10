@@ -58,11 +58,13 @@ for uploaded_file in uploaded_files:
 # Process the uploaded file using the appropriate processors
 if processors and len(processors) > 0:
 
-    current_files = tuple(f.name for f in uploaded_files)
+    current_files = sorted([f.name for f in uploaded_files])
+
+    current_signature="|".join(current_files) 
 
     if (
-        "current_file" not in st.session_state
-        or st.session_state["current_file"] not in current_files
+       "current_signature" not in st.session_state
+        or st.session_state["current_signature"] != current_signature
     ):
 
         with st.spinner("Document is being processed..."):
@@ -79,7 +81,7 @@ if processors and len(processors) > 0:
             docs, chunks = st.session_state["rag_engine"].load_processors(processors)
 
             # Store the current file, documents, and chunks in the session state
-            st.session_state["current_file"] = current_files[0]
+            st.session_state["current_signature"] = current_signature   
             st.session_state["docs"] = docs
             st.session_state["chunks"] = chunks
             st.success("Document processed successfully!")
