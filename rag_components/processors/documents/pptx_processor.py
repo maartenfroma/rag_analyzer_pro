@@ -68,9 +68,12 @@ class PPTXProcessor(BaseDocProcessor):
             for doc in self.documents:
                 text = doc.page_content
                 for chunk in text_splitter.split_text(text):
-                    self.chunks.append(Document(page_content=chunk, metadata={
-                        "source": "pptx"
-                    }))
+                    self.chunks.append(Document(page_content=chunk, 
+                                                metadata={
+                                                      "source": "pptx",
+                                                      "file_name": self.file_name,
+                                                      "index": self.documents.index(doc)
+                                                }))
 
         except Exception as e:
             raise DocumentSplitError(f"Error splitting PPTX documents: {self.file_name}") from e

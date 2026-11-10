@@ -103,7 +103,10 @@ class VideoProcessor(BaseMediaProcessor):
         self.documents = [
             Document(
                 page_content=self.transcript,
-                metadata={"source": "video"}
+                metadata={"source": "video",
+                          "file_name": self.file_name,
+                          "file_type": Path(self.file_name).suffix.lower()
+                          }
             )
         ]
 

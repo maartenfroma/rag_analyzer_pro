@@ -78,8 +78,11 @@ class DocxProcessor(BaseDocProcessor):
             for doc in self.documents:
                 text = doc.page_content
                 for chunk in text_splitter.split_text(text):
-                    self.chunks.append(Document(page_content=chunk, metadata={
-                        "source": "docx"
+                    self.chunks.append(Document(page_content=chunk, 
+                                                metadata={
+                        "source": "docx",
+                        "file_name": self.file_name,
+                        "table": doc.metadata.get("table", "")
                     }))
         except Exception as e:
             raise DocumentSplitError(f"Error splitting DOCX documents: {self.file_name}") from e

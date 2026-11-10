@@ -9,6 +9,8 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.documents import Document
 from langchain_chroma import Chroma 
 
+import textstat
+
 from rag_components.exceptions.document_exceptions import (
     DocumentLoadError, DocumentSplitError, 
     DocumentValidationError, DocumentSaveError)
@@ -68,8 +70,14 @@ class CsvProcessor(BaseDocProcessor):
                 for chunk in text_splitter.split_text(text):
                     self.chunks.append(Document(page_content=chunk, metadata={
                         "source": "csv",
-                        "table": doc.metadata.get("table", "")
-                    }))
+                        "file_name": self.file_name,
+                        "table": doc.metadata.get("table", ""),
+                        "index": self.documents.index(doc),
+                        "chunk_index": len(self.chunks) if self.chunks else None,
+                        
+
+                        }))
+                        
         except Exception as e:
             raise DocumentSplitError(f"Error splitting CSV documents: {self.file_name}") from e
 

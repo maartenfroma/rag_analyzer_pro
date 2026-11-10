@@ -10,6 +10,11 @@ from langchain_chroma import Chroma
 from faster_whisper import WhisperModel
 from rag_components.processors.base.base_media_processor import BaseMediaProcessor
 
+from rag_components.exceptions.document_exceptions import (
+    DocumentLoadError, DocumentSplitError, 
+    DocumentValidationError, DocumentSaveError)
+
+
 class AudioProcessor(BaseMediaProcessor):
 
     # Initialize the audio processor with file bytes, API key, model size, and chunk settings
@@ -38,17 +43,22 @@ class AudioProcessor(BaseMediaProcessor):
                     "chroma_db",
                     Path(self.file_name).stem
                 )
+        self.segments=[]
         
 
     # Load the audio file from the given path or from the temporary file if no path is provided
     # file_path: Path to the audio file. If None, the temporary file will be used.
 
     def load_file(self, file_path=None):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
-            temp_file.write(self.file_bytes)
-            temp_file.flush()
-            self.file_path = temp_file.name
-        return self.file_path   
+
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
+                temp_file.write(self.file_bytes)
+                temp_file.flush()
+                self.file_path = temp_file.name
+            return self.file_path   
+        except Exception as e:
+            raise DocumentLoadError("Failed to load audio file.") from e
     
     # Transcribe the loaded audio file into text
     # Returns the transcript as a string
@@ -59,6 +69,8 @@ class AudioProcessor(BaseMediaProcessor):
             raise ValueError("File not loaded. Call load_file() first.")
         segments, _ = self.model.transcribe(self.file_path)
         self.transcript = " ".join([segment.text for segment in segments])
+        self.segments = segments
+
         return self.transcript  
 
     # Split the transcript into chunks for further processing
@@ -68,25 +80,35 @@ class AudioProcessor(BaseMediaProcessor):
     def create_documents(self):
 
         if not self.transcript:
-          raise ValueError(
-            "Transcript not available. Call transcribe() first."
-        )
+            raise DocumentValidationError(
+                "Transcript not available. Call transcribe() first."
+            )
 
-        self.documents = [
-            Document(
-            page_content=self.transcript,
-            metadata={
-                "source": "audio"
-             }
-                     )
-                 ]
+        self.documents = []
+
+        for segment in self.segments:
+            self.documents.append(
+                Document(
+                    page_content=segment.text,
+                    metadata={
+                        "source": "audio",
+                        "file_name": self.file_name,
+                        "file_type": Path(self.file_name).suffix.lower(),
+                        "start_time": segment.start,
+                        "end_time": segment.end,
+                        "duration": segment.end - segment.start,
+                        "index": segment.index if hasattr(segment, "index") else None,
+                       
+                    }
+                )
+            )
 
         return self.documents
 
     def split_documents(self):
 
         if not self.documents:
-            raise ValueError(
+            raise DocumentValidationError(
                  "No documents available."
                      )
         text_splitter = RecursiveCharacterTextSplitter(
@@ -106,7 +128,7 @@ class AudioProcessor(BaseMediaProcessor):
     def create_vector_store(self):
 
         if not self.chunks:
-            raise ValueError(
+            raise DocumentSplitError(
                 "No chunks available. Call split_documents() first."
             )
 
@@ -144,8 +166,11 @@ class AudioProcessor(BaseMediaProcessor):
 
             return self.vector_store, len(self.documents), len(self.chunks)
         
-        except RuntimeError as e:
+        except (DocumentLoadError, DocumentValidationError, DocumentSplitError, DocumentSaveError) as e:
             print(f"Error processing audio file: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error processing audio file: {e}")
             return None
         
         finally:
