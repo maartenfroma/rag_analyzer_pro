@@ -64,9 +64,29 @@ class GeminiAssistant:
             raise GeminiConnectionError(
                 "Failed to initialize Gemini client.") from e
 
+        # Define the response formatting rules for the Gemini assistant 
+        response_formatting=str(
+
+            "IMPORTANT FORMATTING RULES:\n\n"
+
+            "- Respond using Markdown only.\n"
+            "- Never generate HTML.\n"
+            "- Never use tags such as:\n"
+            "  <ul>, <ol>, <li>, <strong>, <em>, <p>, <div>, <span>.\n"
+            "- Use Markdown bullet points (-).\n"
+            "- Use Markdown numbered lists (1. 2. 3.).\n"
+            "- Use **bold** for emphasis.\n"
+            "- Use *italic* for emphasis.\n"
+            "- Always complete your answer.\n"
+            "- Never stop in the middle of a sentence or list item.\n"
+            "- If the answer is long, finish all sections before ending.\n"
+            "- Do not include any XML, HTML or CSS.\n"
+        )
+
+
         # Store the system prompt, using the default if not 
         # provided
-        self.system_prompt = system_prompt or (
+        self.system_prompt = system_prompt or (response_formatting + "\n\n" + (
 
             "You are an expert document analysis assistant. "
 
@@ -89,7 +109,7 @@ class GeminiAssistant:
 
             "Only say information is unavailable if it truly cannot be "
             "derived from the supplied context."
-                  )
+        ))
                     
         # Select the model to use for the Gemini 
         # client based on availability and preferences

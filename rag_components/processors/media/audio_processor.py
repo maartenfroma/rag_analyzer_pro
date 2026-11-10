@@ -14,6 +14,8 @@ from rag_components.exceptions.document_exceptions import (
     DocumentLoadError, DocumentSplitError, 
     DocumentValidationError, DocumentSaveError)
 
+from rag_components.helpers.metadata_helper import MetadataHelper
+
 
 class AudioProcessor(BaseMediaProcessor):
 
@@ -86,20 +88,19 @@ class AudioProcessor(BaseMediaProcessor):
 
         self.documents = []
 
-        for segment in self.segments:
+        for i, segment in enumerate(self.segments):
+            metadata = MetadataHelper.build_metadata(
+                source="audio",
+                file_name=self.file_name,
+                index=i,
+                start_time=segment.start,
+                end_time=segment.end,
+                chunk_index=len(self.documents)
+            )
             self.documents.append(
                 Document(
                     page_content=segment.text,
-                    metadata={
-                        "source": "audio",
-                        "file_name": self.file_name,
-                        "file_type": Path(self.file_name).suffix.lower(),
-                        "start_time": segment.start,
-                        "end_time": segment.end,
-                        "duration": segment.end - segment.start,
-                        "index": segment.index if hasattr(segment, "index") else None,
-                       
-                    }
+                    metadata=metadata
                 )
             )
 

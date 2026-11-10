@@ -14,6 +14,8 @@ from rag_components.exceptions.document_exceptions import (
     DocumentLoadError, DocumentSplitError, 
     DocumentValidationError, DocumentSaveError)
 
+from rag_components.helpers.metadata_helper import MetadataHelper
+
 
 
 class PPTXProcessor(BaseDocProcessor):  
@@ -65,15 +67,16 @@ class PPTXProcessor(BaseDocProcessor):
                 chunk_overlap=self.chunk_overlap
             )
             self.chunks = []
-            for doc in self.documents:
+            for idx, doc in enumerate(self.documents):
                 text = doc.page_content
                 for chunk in text_splitter.split_text(text):
-                    self.chunks.append(Document(page_content=chunk, 
-                                                metadata={
-                                                      "source": "pptx",
-                                                      "file_name": self.file_name,
-                                                      "index": self.documents.index(doc)
-                                                }))
+                    metadata=MetadataHelper.build_metadata(
+                        source="pptx",
+                        file_name=self.file_name,
+                        index=idx,
+                        chunk_index=len(self.chunks)
+                    )
+                    self.chunks.append(Document(page_content=chunk, metadata=metadata))
 
         except Exception as e:
             raise DocumentSplitError(f"Error splitting PPTX documents: {self.file_name}") from e

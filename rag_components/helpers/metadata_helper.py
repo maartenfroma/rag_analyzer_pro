@@ -17,4 +17,6 @@ class MetadataHelper:
             }
         )
 
+        # Return the complete metadata dictionary including 
+        # any extra fields provided
         return metadata

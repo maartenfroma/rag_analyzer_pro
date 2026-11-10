@@ -16,6 +16,8 @@ from rag_components.exceptions.document_exceptions import (
     DocumentLoadError, DocumentSplitError, 
     DocumentValidationError, DocumentSaveError)
 
+from rag_components.helpers.metadata_helper import MetadataHelper
+
 class VideoProcessor(BaseMediaProcessor):
 
     def __init__(self, file_bytes: bytes, api_key:str, file_name: str, model_size="small", 
@@ -98,17 +100,28 @@ class VideoProcessor(BaseMediaProcessor):
 
     def create_documents(self):
         if not self.transcript:
-            raise DocumentValidationError("Transcript not available. Call transcribe() first.")
+            raise DocumentValidationError("Transcript not available. " \
+            "Call transcribe() first.")
 
-        self.documents = [
-            Document(
-                page_content=self.transcript,
-                metadata={"source": "video",
-                          "file_name": self.file_name,
-                          "file_type": Path(self.file_name).suffix.lower()
-                          }
+        segments, _ = self.model.transcribe(self.audio_path)    
+        self.documents = []
+
+        # Create documents for each segment with metadata
+        for i, segment in enumerate(segments):
+            metadata = MetadataHelper.build_metadata(
+                source="video",
+                file_name=self.file_name,
+                index=i,
+                start_time=segment.start,
+                end_time=segment.end,
+                chunk_index=len(self.documents)
             )
-        ]
+            self.documents.append(
+                Document(
+                    page_content=segment.text,
+                    metadata=metadata
+                )
+            )
 
         return self.documents
 

@@ -13,6 +13,8 @@ from rag_components.exceptions.document_exceptions import (
     DocumentLoadError, DocumentSplitError, 
     DocumentValidationError, DocumentSaveError)
 
+from rag_components.helpers.metadata_helper import MetadataHelper
+
 
 
 class DocxProcessor(BaseDocProcessor):
@@ -75,16 +77,18 @@ class DocxProcessor(BaseDocProcessor):
                 separators=["\n\n", "\n", " ", ""]
             )
             self.chunks = []
-            for doc in self.documents:
+            for i, doc in enumerate(self.documents):
+                
                 text = doc.page_content
                 for chunk in text_splitter.split_text(text):
+                    metadata=MetadataHelper.build_metadata(
+                        source="docx",
+                        file_name=self.file_name,
+                        index=i,
+                        chunk_index=len(self.chunks)
+                    )
                     self.chunks.append(Document(page_content=chunk, 
-                                                metadata={
-                        "source": "docx",
-                        "file_name": self.file_name,
-                        "table": doc.metadata.get("table", ""),
-                        "index": self.documents.index(doc)
-                    }))
+                                                metadata=metadata))
         except Exception as e:
             raise DocumentSplitError(f"Error splitting DOCX documents: {self.file_name}") from e
 

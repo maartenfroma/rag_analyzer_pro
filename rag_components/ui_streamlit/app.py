@@ -58,16 +58,16 @@ for uploaded_file in uploaded_files:
 # Process the uploaded file using the appropriate processors
 if processors and len(processors) > 0:
 
-    current_file = uploaded_files[0].name
+    current_files = tuple(f.name for f in uploaded_files)
 
     if (
         "current_file" not in st.session_state
-        or st.session_state["current_file"] != current_file
+        or st.session_state["current_file"] not in current_files
     ):
 
         with st.spinner("Document is being processed..."):
 
-            st.write(f"PROCESSING: {current_file}")
+            st.write(f"PROCESSING: {current_files[0]}")
 
             # Initialize the Gemini assistant and RAG engine
             assistant = GeminiAssistant()
@@ -79,7 +79,7 @@ if processors and len(processors) > 0:
             docs, chunks = st.session_state["rag_engine"].load_processors(processors)
 
             # Store the current file, documents, and chunks in the session state
-            st.session_state["current_file"] = current_file
+            st.session_state["current_file"] = current_files[0]
             st.session_state["docs"] = docs
             st.session_state["chunks"] = chunks
             st.success("Document processed successfully!")
@@ -89,13 +89,18 @@ if "rag_engine" in st.session_state:
 
     question = st.text_input("Ask a question to the RAG engine:")
 
+else:
+    st.warning("Please upload a file to initialize the RAG engine.")
+
 # Submit the question to the RAG engine when the button is clicked
 if st.button("Submit Question"):
         if question:
             with st.spinner("Getting answer from RAG engine..."):
 
                 # Ask the RAG engine the question and get the answer and sources
-                answer, sources = st.session_state["rag_engine"].ask(question, k=10)
+                answer, sources = st.session_state["rag_engine"].ask(question, k=3)
+
+                
                 chat_history = st.session_state["rag_engine"].get_chat_history()
 
                 for entry in chat_history:

@@ -15,6 +15,8 @@ from rag_components.exceptions.document_exceptions import (
     DocumentLoadError, DocumentSplitError, 
     DocumentValidationError, DocumentSaveError)
 
+from rag_components.helpers.metadata_helper import MetadataHelper
+
 class CsvProcessor(BaseDocProcessor):
 
     
@@ -65,18 +67,19 @@ class CsvProcessor(BaseDocProcessor):
                 chunk_overlap=self.chunk_overlap
             )
             self.chunks = []
-            for doc in self.documents:
+            for i, doc in enumerate(self.documents):
                 text = doc.page_content
                 for chunk in text_splitter.split_text(text):
-                    self.chunks.append(Document(page_content=chunk, metadata={
-                        "source": "csv",
-                        "file_name": self.file_name,
-                        "table": doc.metadata.get("table", ""),
-                        "index": self.documents.index(doc),
-                        "chunk_index": len(self.chunks) if self.chunks else None,
-                        
-
-                        }))
+                    metadata=MetadataHelper.build_metadata(
+                      source="csv",
+                       file_name=self.file_name,
+                       index=i,
+                       chunk_index=len(self.chunks)
+                    )
+                    print(doc.metadata)
+                    # Append the chunk with its metadata to the list 
+                    # of chunks
+                    self.chunks.append(Document(page_content=chunk, metadata=metadata))
                         
         except Exception as e:
             raise DocumentSplitError(f"Error splitting CSV documents: {self.file_name}") from e

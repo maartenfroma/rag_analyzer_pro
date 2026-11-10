@@ -14,6 +14,7 @@ from rag_components.exceptions.document_exceptions import (
     DocumentLoadError, DocumentSplitError, 
     DocumentValidationError, DocumentSaveError)
 
+from rag_components.helpers.metadata_helper import MetadataHelper
 
 class ExcelProcessor(BaseDocProcessor):
 
@@ -66,19 +67,29 @@ class ExcelProcessor(BaseDocProcessor):
                 chunk_size=self.chunk_size,
                 chunk_overlap=self.chunk_overlap
             )
+            #Return the list of chunks after splitting each document into smaller pieces
             self.chunks = []
 
-            for doc in self.documents:
-                sheet_name, df = doc
+            # Iterate over each document (sheet) and split its content 
+            # into chunks
+            for idx, (sheet_name, df) in enumerate(self.documents):
+
                 text = df.to_csv(index=False)
+
+                # Split the text of the current sheet into smaller chunks   
                 for chunk in text_splitter.split_text(text):
+
+                    # Build metadata for the current chunk using the MetadataHelper
+                    metadata=MetadataHelper.build_metadata(
+                        source="excel",
+                        file_name=self.file_name,
+                        table=sheet_name,
+                        index=idx
+                    )
+
+                    # Append the current chunk along with its metadata to the list of chunks
                     self.chunks.append(Document(page_content=chunk, 
-                                                metadata={
-                        "source": "excel",
-                        "file_name": self.file_name,
-                        "table": doc.metadata.get("table", ""),
-                        "index": self.documents.index(doc)
-                    })) 
+                                                metadata=metadata))  
 
         except Exception as e:
             raise DocumentSplitError(f"Error splitting Excel documents: {self.file_name}") from e

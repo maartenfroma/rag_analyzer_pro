@@ -15,6 +15,8 @@ from rag_components.exceptions.document_exceptions import (
     DocumentLoadError, DocumentSplitError, 
     DocumentValidationError, DocumentSaveError)
 
+from rag_components.helpers.metadata_helper import MetadataHelper
+
 
 
 class PdfProcessor(BaseDocProcessor):
@@ -72,15 +74,19 @@ class PdfProcessor(BaseDocProcessor):
           )
 
         self.chunks = []
-        for doc in self.documents:
+
+        for i, doc in enumerate(self.documents):
             text = doc.page_content
             for chunk in text_splitter.split_text(text):
+                metadata=MetadataHelper.build_metadata(
+                    source="pdf",
+                    file_name=self.file_name,
+                    index=i,
+                    chunk_index=len(self.chunks),   
+                    page_number=doc.metadata.get("page_number") if doc.metadata else None
+                )
                 self.chunks.append(Document(page_content=chunk, 
-                                            metadata={
-                                                      "source": "pdf",
-                                                      "file_name": self.file_name,
-                                                      "index": self.documents.index(doc)    
-                                            }))     
+                                            metadata=metadata))     
         return self.chunks
 
     
