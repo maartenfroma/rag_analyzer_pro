@@ -14,3 +14,8 @@ class SimilaritySearchError(RAGEngineError):
 class ContextGenerationError(RAGEngineError):
     """Exception raised for errors during context generation."""
     pass
+
+class ChatHistoryError(RAGEngineError):
+    """Exception raised for errors related to chat history management."""
+    pass
+

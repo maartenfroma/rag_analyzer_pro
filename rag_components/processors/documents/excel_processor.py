@@ -72,9 +72,12 @@ class ExcelProcessor(BaseDocProcessor):
                 sheet_name, df = doc
                 text = df.to_csv(index=False)
                 for chunk in text_splitter.split_text(text):
-                    self.chunks.append(Document(page_content=chunk, metadata={
+                    self.chunks.append(Document(page_content=chunk, 
+                                                metadata={
                         "source": "excel",
-                        "table": sheet_name
+                        "file_name": self.file_name,
+                        "table": doc.metadata.get("table", ""),
+                        "index": self.documents.index(doc)
                     })) 
 
         except Exception as e:

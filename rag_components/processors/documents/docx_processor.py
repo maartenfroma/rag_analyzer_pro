@@ -82,7 +82,8 @@ class DocxProcessor(BaseDocProcessor):
                                                 metadata={
                         "source": "docx",
                         "file_name": self.file_name,
-                        "table": doc.metadata.get("table", "")
+                        "table": doc.metadata.get("table", ""),
+                        "index": self.documents.index(doc)
                     }))
         except Exception as e:
             raise DocumentSplitError(f"Error splitting DOCX documents: {self.file_name}") from e

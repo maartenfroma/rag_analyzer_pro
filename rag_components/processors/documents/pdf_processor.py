@@ -76,8 +76,10 @@ class PdfProcessor(BaseDocProcessor):
             text = doc.page_content
             for chunk in text_splitter.split_text(text):
                 self.chunks.append(Document(page_content=chunk, 
-                                            metadata={**doc.metadata,
-                                                      "source": "pdf"
+                                            metadata={
+                                                      "source": "pdf",
+                                                      "file_name": self.file_name,
+                                                      "index": self.documents.index(doc)    
                                             }))     
         return self.chunks
 
@@ -127,8 +129,8 @@ class PdfProcessor(BaseDocProcessor):
             self.split_documents()
             self.create_vector_store()
 
-            return (self.vector_store, len(self.documents), 
-                    len(self.chunks))
+            return (self.vector_store, len(self.chunks), 
+                    len(self.documents))
         
         
         finally:
