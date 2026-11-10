@@ -10,6 +10,11 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document   
 
 
+from rag_components.exceptions.document_exceptions import (
+    DocumentLoadError, DocumentSplitError, 
+    DocumentValidationError, DocumentSaveError)
+
+
 
 class PPTXProcessor(BaseDocProcessor):  
 
@@ -39,21 +44,21 @@ class PPTXProcessor(BaseDocProcessor):
                 temp_file.write(self.file_bytes)
                 self.temp_path = temp_file.name
         except Exception as e:
-            raise RuntimeError(f"Error loading PPTX file: {e}")
+            raise DocumentLoadError(f"Error loading PPTX file: {self.file_name}") from e
 
     def extract_pages(self):
         try:
             loader = UnstructuredPowerPointLoader(file_path=self.temp_path)
             self.documents = loader.load()
         except Exception as e:
-            raise RuntimeError(f"Error extracting pages from PPTX file: {e}")
+            raise DocumentLoadError(f"Error extracting pages from PPTX file: {self.file_name}") from e
 
         return self.documents
 
     def split_documents(self):
         try:
             if not self.documents:
-                raise ValueError("No documents to split. Please extract pages first.")
+                raise DocumentValidationError("No documents to split. Please extract pages first.")
 
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=self.chunk_size,
@@ -68,14 +73,14 @@ class PPTXProcessor(BaseDocProcessor):
                     }))
 
         except Exception as e:
-            raise RuntimeError(f"Error splitting PPTX documents: {e}")
+            raise DocumentSplitError(f"Error splitting PPTX documents: {self.file_name}") from e
 
         return self.chunks
 
     def create_vector_store(self):
         try:
             if not self.chunks:
-                raise ValueError("No chunks to create vector store. Please split documents first.")
+                raise DocumentValidationError("No chunks to create vector store. Please split documents first.")
 
             embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
                                                       google_api_key=self.api_key, 
@@ -94,7 +99,7 @@ class PPTXProcessor(BaseDocProcessor):
                     persist_directory=self.DB_PATH
                 )
         except Exception as e:
-            raise RuntimeError(f"Error creating vector store from PPTX chunks: {e}")
+            raise DocumentSaveError(f"Error creating vector store from PPTX chunks: {self.file_name}") from e
 
         return self.vector_store    
 
@@ -109,8 +114,6 @@ class PPTXProcessor(BaseDocProcessor):
 
             return self.vector_store, len(self.chunks), len(self.documents)
 
-        except Exception as e:
-            raise RuntimeError(f"Error processing PPTX file: {e}")
 
         finally:
             if self.temp_path and os.path.exists(self.temp_path):

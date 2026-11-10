@@ -10,6 +10,11 @@ from langchain_core.documents import Document
 from pathlib import Path
 
 
+from rag_components.exceptions.document_exceptions import (
+    DocumentLoadError, DocumentSplitError, 
+    DocumentValidationError, DocumentSaveError)
+
+
 class ExcelProcessor(BaseDocProcessor):
 
     def __init__(self, file_bytes, api_key: str, file_name: str, chunk_size: int=1000, 
@@ -35,7 +40,7 @@ class ExcelProcessor(BaseDocProcessor):
                 temp_file.write(self.file_bytes)
                 self.temp_path = temp_file.name
         except Exception as e:
-            raise RuntimeError(f"Error loading Excel file: {e}")    
+            raise DocumentLoadError(f"Error loading Excel file: {self.file_name}") from e
 
     def extract_pages(self):
         try:
@@ -46,14 +51,14 @@ class ExcelProcessor(BaseDocProcessor):
                 self.documents.append((sheet_name, df))
         
         except Exception as e:
-            raise RuntimeError(f"Error extracting pages from Excel file: {e}")      
+            raise DocumentLoadError(f"Error extracting pages from Excel file: {self.file_name}") from e
 
         return self.documents   
 
     def split_documents(self):
         try:
             if not self.documents:
-                raise ValueError("No documents to split. Please extract pages first.")
+                raise DocumentValidationError("No documents to split. Please extract pages first.")
 
             # Initialize the text splitter for chunking the document text
 
@@ -73,7 +78,7 @@ class ExcelProcessor(BaseDocProcessor):
                     })) 
 
         except Exception as e:
-            raise RuntimeError(f"Error splitting Excel documents: {e}")
+            raise DocumentSplitError(f"Error splitting Excel documents: {self.file_name}") from e
 
         #Return the list of chunks
         return self.chunks
@@ -84,7 +89,7 @@ class ExcelProcessor(BaseDocProcessor):
 
             # Check if there are any chunks to create the vector store from
             if not self.chunks:
-                raise ValueError("No chunks to create vector store. Please split documents first.")
+                raise DocumentValidationError("No chunks to create vector store. Please split documents first.")
 
             embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
                                                           google_api_key=self.api_key, 
@@ -104,7 +109,7 @@ class ExcelProcessor(BaseDocProcessor):
                     persist_directory=self.DB_PATH
                 )
         except Exception as e:
-            raise RuntimeError(f"Error creating vector store from Excel chunks: {e}")
+            raise DocumentSaveError(f"Error creating vector store from Excel chunks: {self.file_name}") from e
 
         return self.vector_store
 
@@ -118,9 +123,6 @@ class ExcelProcessor(BaseDocProcessor):
             self.create_vector_store()
 
             return self.vector_store, len(self.chunks), len(self.documents)
-
-        except Exception as e:
-            raise RuntimeError(f"Error processing Excel file: {e}")
 
         finally:
             if self.temp_path and os.path.exists(self.temp_path):

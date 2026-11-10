@@ -2,20 +2,44 @@ from typing import Any
 from langchain_core.documents import Document
 from streamlit import context
 from rag_components.ai_assistants.gemini_ai_assistant import GeminiAssistant
-from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+from rag_components.exceptions.rag_exceptions import (
+    ChatHistoryError, 
+    VectorStoreError, 
+    SimilaritySearchError, 
+    ContextGenerationError
+)
+from rag_components.exceptions.gemini_exceptions import GeminiAuthenticationError
+
+import logging
+logger = logging.getLogger(__name__)
 
 class RAGEngine:
 
     # Initialize the RAG engine with a GeminiAssistant instance and optional vector store
     def __init__(self, assistant: GeminiAssistant):
         self.assistant: GeminiAssistant = assistant
-        self.vector_stores: list=[]
-        # Stores (query, response) pairs
 
-        # Initialize the chat history as a list of dictionaries
-        self.chat_history: list[dict] = []  
-        # Stores the vector store instance for retrieval
+        if not assistant:
+            raise GeminiAuthenticationError("A GeminiAssistant instance must be provided.")
+        
+        logger.info("RAGEngine initialized with GeminiAssistant.")
+        logger.info("Initializing vector stores and chat history.")
+
+        try:
+            self.vector_stores: list=[]
+            # Stores (query, response) pairs
+        except Exception as e:
+            logger.error("Error initializing vector stores: %s", e)
+            raise VectorStoreError("Failed to initialize vector stores.")   
+
+        try:
+            # Initialize the chat history as a list of dictionaries
+            self.chat_history: list[dict] = []  
+            # Stores the vector store instance for retrieval
+        except Exception as e:
+            logger.error("Error initializing chat history: %s", e)
+            raise ChatHistoryError("Failed to initialize chat history.")    
 
     # Load a processors (e.g., vector store) into the RAG engine
     #Retrieve content from the vector store based on a query
@@ -53,18 +77,22 @@ class RAGEngine:
          ) -> str:
 
         if not self.vector_stores:
-            raise ValueError(
+            raise VectorStoreError(
                 "Vector store is not loaded."
             )
+        try:
+            documents=[]
+            for vs in self.vector_stores:
+                docs=vs.similarity_search(
+                    query=query,
+                    k=k
+                )
+                documents.extend(docs)
+        except Exception as e:
+            logger.error("Error during similarity search: %s", e)
+            raise SimilaritySearchError("Failed to retrieve content from vector store.") from e
 
-        documents=[]
-        for vs in self.vector_stores:
-            docs=vs.similarity_search(
-                query=query,
-                k=k
-            )
-            documents.extend(docs)
-
+        try:
             unique_docs=[]
             seen=set()
 
@@ -77,12 +105,27 @@ class RAGEngine:
                     source=doc.metadata.get("source_file", "unknown")
                     page=doc.metadata.get("page", "?")
                     context_parts.append(f"Document: {source} | Page: {page}\n"
-                                         f"{doc.page_content}"
+                                        f"{doc.page_content}"
                     )
-        
 
-        context = "\n\n".join(context_parts)
-        
+            context = "\n\n".join(context_parts)
+        except Exception as e:
+            logger.error("Error during context generation: %s", e)
+            raise ContextGenerationError("Failed to generate context.") from e
+
+        context_parts=[]
+        for doc in documents:
+            if doc.page_content not in seen:
+                unique_docs.append(doc)
+                seen.add(doc.page_content)
+
+                source=doc.metadata.get("source_file", "unknown")
+                page=doc.metadata.get("page", "?")
+                context_parts.append(f"Document: {source} | Page: {page}\n"
+                                        f"{doc.page_content}"
+                )
+    
+
         return context
 
     def ask(self, query: str, k: int = 10, enable_serp: bool = False) -> tuple[str, list[str]]:
@@ -95,6 +138,8 @@ class RAGEngine:
         # Append the query, answer, sources, and context to the chat history for reference
         self.chat_history.append({"query": query, "response": answer})
         # Append the query and answer to the chat history
+        if not self.chat_history or self.chat_history[-1]["query"] != query:
+            raise ChatHistoryError("Failed to append to chat history.")
         
 
         # Return the answer and sources as a tuple for further processing or display

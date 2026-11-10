@@ -9,6 +9,10 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.documents import Document
 from langchain_chroma import Chroma 
 
+from rag_components.exceptions.document_exceptions import (
+    DocumentLoadError, DocumentSplitError, 
+    DocumentValidationError, DocumentSaveError)
+
 class CsvProcessor(BaseDocProcessor):
 
     
@@ -36,7 +40,8 @@ class CsvProcessor(BaseDocProcessor):
                 temp_file.write(self.file_bytes)
                 self.temp_path = temp_file.name
         except Exception as e:
-            raise RuntimeError(f"Error loading CSV file: {e}")
+            raise DocumentLoadError(f"Error loading CSV file: {self.file_name}") from e
+        return self.temp_path
 
     def extract_pages(self):
         try:
@@ -44,14 +49,14 @@ class CsvProcessor(BaseDocProcessor):
             df = pd.read_csv(self.temp_path)
             self.documents.append(Document(page_content=df.to_csv(index=False), metadata={"source": "csv", "table": "sheet1"}))
         except Exception as e:
-            raise RuntimeError(f"Error extracting pages from CSV file: {e}")      
+            raise DocumentLoadError(f"Error extracting pages from CSV file: {self.file_name}") from e
 
         return self.documents
 
     def split_documents(self):
         try:
             if not self.documents:
-                raise ValueError("No documents to split. Please extract pages first.")
+                raise DocumentValidationError("No documents to split. Please extract pages first.")
 
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=self.chunk_size,
@@ -66,7 +71,7 @@ class CsvProcessor(BaseDocProcessor):
                         "table": doc.metadata.get("table", "")
                     }))
         except Exception as e:
-            raise RuntimeError(f"Error splitting CSV documents: {e}")
+            raise DocumentSplitError(f"Error splitting CSV documents: {self.file_name}") from e
 
         return self.chunks
 
@@ -76,7 +81,7 @@ class CsvProcessor(BaseDocProcessor):
 
             # Check if there are any chunks to create the vector store from
             if not self.chunks:
-                raise ValueError("No chunks to create vector store. Please split documents first.")
+                raise DocumentValidationError("No chunks to create vector store. Please split documents first.")
 
             embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
                                                           google_api_key=self.api_key, 
@@ -102,7 +107,7 @@ class CsvProcessor(BaseDocProcessor):
                 return self.vector_store
             
         except Exception as e:
-                raise RuntimeError(f"Error creating vector store from CSV chunks: {e}")
+                raise DocumentSaveError(f"Error creating vector store from CSV chunks: {self.file_name}") from e
             
 
            
@@ -118,8 +123,7 @@ class CsvProcessor(BaseDocProcessor):
             #Return the vector store, number of chunks, and number of documents
             return self.vector_store, len(self.chunks), len(self.documents)
         
-        except Exception as e:
-            raise RuntimeError(f"Error processing CSV file: {e}")
+
 
         
         finally:

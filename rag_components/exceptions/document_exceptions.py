@@ -2,10 +2,18 @@
 
 class DocumentError(Exception):
     """Base class for document-related exceptions."""
-    pass    
+    pass
+
+class UnsupportedDocumentException(DocumentError):
+    """Raised when the document has an unsupported file extension."""
+    pass
 
 class DocumentLoadError(DocumentError):
     """Raised when there is an error loading a document."""
+    pass
+
+class DocumentFileError(DocumentError):
+    """Raised when there is an error with the document file."""
     pass
 
 class DocumentSplitError(DocumentError):
@@ -40,4 +48,8 @@ class DocumentResponseError(DocumentError):
     pass
 class DocumentValidationError(DocumentError):
     """Raised when there is a validation-related error with a document."""
-    pass        
+    pass 
+
+class ProcessorCreationError(DocumentError):
+    """Raised when there is an error creating a processor."""
+    pass

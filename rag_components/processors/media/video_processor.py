@@ -12,6 +12,10 @@ from moviepy import VideoFileClip
 
 from rag_components.processors.base.base_media_processor import BaseMediaProcessor
 
+from rag_components.exceptions.document_exceptions import (
+    DocumentLoadError, DocumentSplitError, 
+    DocumentValidationError, DocumentSaveError)
+
 class VideoProcessor(BaseMediaProcessor):
 
     def __init__(self, file_bytes: bytes, api_key:str, file_name: str, model_size="small", 
@@ -38,11 +42,14 @@ class VideoProcessor(BaseMediaProcessor):
     # file_path: Path to the video file. If None, the temporary file will be used.
 
     def load_file(self, file_path=None):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
-            temp_file.write(self.file_bytes)
-            temp_file.flush()
-            self.video_path = temp_file.name
-        return self.video_path
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
+                temp_file.write(self.file_bytes)
+                temp_file.flush()
+                self.video_path = temp_file.name
+            return self.video_path
+        except Exception as e:
+            raise DocumentLoadError("Failed to load video file.") from e
 
     
     # Extract audio from the loaded video file
@@ -91,7 +98,7 @@ class VideoProcessor(BaseMediaProcessor):
 
     def create_documents(self):
         if not self.transcript:
-            raise ValueError("Transcript not available. Call transcribe() first.")
+            raise DocumentValidationError("Transcript not available. Call transcribe() first.")
 
         self.documents = [
             Document(
@@ -108,7 +115,7 @@ class VideoProcessor(BaseMediaProcessor):
 
     def split_documents(self):
         if not self.documents:
-            raise ValueError("No documents available. Call create_documents() first.")
+            raise DocumentValidationError("No documents available. Call create_documents() first.")
 
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
@@ -125,7 +132,7 @@ class VideoProcessor(BaseMediaProcessor):
 
     def create_vector_store(self):
         if not self.chunks:
-            raise ValueError("No chunks available. Call split_documents() first.")
+            raise DocumentSplitError("No chunks available. Call split_documents() first.")
 
         embeddings = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001",
@@ -165,8 +172,12 @@ class VideoProcessor(BaseMediaProcessor):
 
             return self.vector_store, len(self.documents), len(self.chunks)
 
+        except (DocumentLoadError, DocumentValidationError, DocumentSplitError, DocumentSaveError) as e:
+            print(f"Error processing video file: {e}")
+            return None
         except Exception as e:
-            raise RuntimeError("Error processing video file") from e
+            print(f"Unexpected error processing video file: {e}")
+            return None
             
            
 

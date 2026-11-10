@@ -11,6 +11,11 @@ from rag_components.processors.base.base_document_processor import BaseDocProces
 from langchain_core.documents import Document
 
 
+from rag_components.exceptions.document_exceptions import (
+    DocumentLoadError, DocumentSplitError, 
+    DocumentValidationError, DocumentSaveError)
+
+
 
 class PdfProcessor(BaseDocProcessor):
 
@@ -36,12 +41,15 @@ class PdfProcessor(BaseDocProcessor):
         )
     #LOAD FILE
     def load_file(self):
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            temp_file.write(self.file_bytes)
-            self.temp_path = temp_file.name
 
-        return self.temp_path
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                temp_file.write(self.file_bytes)
+                self.temp_path = temp_file.name
+
+            return self.temp_path
+        except Exception as e:
+            raise DocumentLoadError(f"Error loading PDF file: {self.file_name}") from e
 
     #EXTRACT PAGES FROM PDF 
     def extract_pages(self):
@@ -55,7 +63,7 @@ class PdfProcessor(BaseDocProcessor):
     def split_documents(self):
 
         if not self.documents:
-            raise ValueError("No documents to split. Please extract pages first.")
+            raise DocumentValidationError("No documents to split. Please extract pages first.")
 
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
@@ -81,7 +89,7 @@ class PdfProcessor(BaseDocProcessor):
 
             # Check if there are any chunks to create the vector store from
             if not self.chunks:
-                raise ValueError("No chunks to create vector store. Please split documents first.")
+                raise DocumentValidationError("No chunks to create vector store. Please split documents first.")
 
             embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", 
                                                           google_api_key=self.api_key, 
@@ -105,7 +113,7 @@ class PdfProcessor(BaseDocProcessor):
                 return self.vector_store
             
         except Exception as e:
-                raise RuntimeError(f"Error creating vector store from PDF chunks: {e}")
+                raise DocumentSaveError(f"Error creating vector store from PDF chunks: {self.file_name}") from e
     
     #PROCESS THE PDF FILE
     def process(self):
@@ -122,9 +130,7 @@ class PdfProcessor(BaseDocProcessor):
             return (self.vector_store, len(self.documents), 
                     len(self.chunks))
         
-        except Exception as e:
-            raise RuntimeError(f"Error processing PDF: {e}")
-
+        
         finally:
             if self.temp_path and os.path.exists(self.temp_path):
                 os.remove(self.temp_path)
