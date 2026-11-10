@@ -26,20 +26,14 @@ class RAGEngine:
         logger.info("RAGEngine initialized with GeminiAssistant.")
         logger.info("Initializing vector stores and chat history.")
 
-        try:
-            self.vector_stores: list=[]
-            # Stores (query, response) pairs
-        except Exception as e:
-            logger.error("Error initializing vector stores: %s", e)
-            raise VectorStoreError("Failed to initialize vector stores.")   
+        # Initialize the vector stores list
+        logger.info("Initializing RAGEngine components.")
+        self.vector_stores: list=[]
+           
 
-        try:
-            # Initialize the chat history as a list of dictionaries
-            self.chat_history: list[dict] = []  
-            # Stores the vector store instance for retrieval
-        except Exception as e:
-            logger.error("Error initializing chat history: %s", e)
-            raise ChatHistoryError("Failed to initialize chat history.")    
+        # Initialize the chat history as a list of dictionaries
+        self.chat_history: list[dict] = []  
+   
 
     # Load a processors (e.g., vector store) into the RAG engine
     #Retrieve content from the vector store based on a query
@@ -98,32 +92,52 @@ class RAGEngine:
 
             context_parts=[]
             for doc in documents:
+                logger.info("Metadata for document: %s",    
+                             doc.metadata)
+
                 if doc.page_content not in seen:
                     unique_docs.append(doc)
                     seen.add(doc.page_content)
 
-                    source=doc.metadata.get("source_file", "unknown")
+                    source=doc.metadata.get("file_name", "unknown")
+
+                    meta=[]
+
+                    if "page" in doc.metadata:
+                        meta.append(f"Page: {doc.metadata['page']}")
+                    if "table" in doc.metadata:
+                        meta.append(f"Table: {doc.metadata['table']}")
+
+                    if "slide" in doc.metadata:
+                        meta.append(f"Slide: {doc.metadata['slide']}")
+
+                    if "start_time" in doc.metadata:
+                        meta.append(f"Start Time: {doc.metadata['start_time']}")
+
+                    if "end_time" in doc.metadata:
+                        meta.append(f"End Time: {doc.metadata['end_time']}")   
+
+                    if "duration" in doc.metadata:
+                        meta.append(f"Duration: {doc.metadata['duration']}")
+
+                    if "index" in doc.metadata:
+                        meta.append(f"Index: {doc.metadata['index']}")
+
                     page=doc.metadata.get("page", "?")
-                    context_parts.append(f"Document: {source} | Page: {page}\n"
-                                        f"{doc.page_content}"
+                    
+                                
+                    meta_info = " | ".join(meta)
+
+                    context_parts.append(
+                    f"Document: {source}"
+                    f"{' | ' + meta_info if meta_info else ''}\n"
+                    f"{doc.page_content}"
                     )
 
             context = "\n\n".join(context_parts)
         except Exception as e:
             logger.error("Error during context generation: %s", e)
             raise ContextGenerationError("Failed to generate context.") from e
-
-        context_parts=[]
-        for doc in documents:
-            if doc.page_content not in seen:
-                unique_docs.append(doc)
-                seen.add(doc.page_content)
-
-                source=doc.metadata.get("source_file", "unknown")
-                page=doc.metadata.get("page", "?")
-                context_parts.append(f"Document: {source} | Page: {page}\n"
-                                        f"{doc.page_content}"
-                )
     
 
         return context
@@ -137,9 +151,6 @@ class RAGEngine:
 
         # Append the query, answer, sources, and context to the chat history for reference
         self.chat_history.append({"query": query, "response": answer})
-        # Append the query and answer to the chat history
-        if not self.chat_history or self.chat_history[-1]["query"] != query:
-            raise ChatHistoryError("Failed to append to chat history.")
         
 
         # Return the answer and sources as a tuple for further processing or display

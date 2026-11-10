@@ -6,12 +6,12 @@ from rag_components.processors.media.audio_processor import AudioProcessor
 from rag_components.processors.documents.pptx_processor import PPTXProcessor
 from rag_components.processors.media.video_processor import VideoProcessor
 
-from exceptions.document_exceptions import (UnsupportedDocumentException, 
+from rag_components.exceptions.document_exceptions import (UnsupportedDocumentException, 
                                             DocumentLoadError, 
                                             ProcessorCreationError, 
                                             DocumentFileError)
 
-from exceptions.gemini_exceptions import GeminiAuthenticationError
+from rag_components.exceptions.gemini_exceptions import GeminiAuthenticationError
 
 import logging
 logging.basicConfig(level=logging.INFO)
