@@ -206,9 +206,7 @@ class GeminiAssistant:
 
         # Log the final answer and web sources for debugging purposes
         answer = response.text or ""
-        logger.info(f"Final answer: {answer}")
-        logger.info(f"Web sources: {web_sources}")
-        # Initialize web_sources as an empty list if not already set    
+        logger.info(f"Final answer: {answer}")  
         
         
         web_sources: List[str] = []
