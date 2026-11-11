@@ -33,6 +33,9 @@ class RAGEngine:
 
         # Initialize the chat history as a list of dictionaries
         self.chat_history: list[dict] = []  
+
+        # Store the last retrieved documents from the vector store
+        self.last_retrieved_docs=[]
    
 
     # Load a processors (e.g., vector store) into the RAG engine
@@ -91,6 +94,7 @@ class RAGEngine:
             seen=set()
 
             context_parts=[]
+
             for doc in documents:
                 logger.info("Metadata for document: %s",    
                              doc.metadata)
@@ -134,6 +138,10 @@ class RAGEngine:
                     f"{doc.page_content}"
                     )
 
+            # Store the unique documents as the last retrieved documents 
+            # for reference
+            self.last_retrieved_docs=unique_docs
+
             context = "\n\n".join(context_parts)
         except Exception as e:
             logger.error("Error during context generation: %s", e)
@@ -142,10 +150,13 @@ class RAGEngine:
 
         return context
 
-    def ask(self, query: str, k: int = 10, enable_serp: bool = False) -> tuple[str, list[str]]:
+    def ask(self, query: str, k: int = 4, enable_serp: bool = False) -> tuple[str, list[str]]:
+       
         # Ask a question to the RAG engine and get a response based on retrieved context
         # Retrieve the context from the vector store based on the query
         context: str = self.retrieve_content(query, k=k)
+
+        print("Retrieved context:\n", context)
 
         answer, sources = self.assistant.ask_with_context(query=query, context=context, enable_serp=enable_serp)
 

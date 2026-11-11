@@ -189,7 +189,7 @@ class GeminiAssistant:
             system_instruction=self.system_prompt,
             tools=tools,
             temperature=0.3 if not enable_serp else 0.7,
-            max_output_tokens=2000,
+            max_output_tokens=4000,
         )
 
         # Prepare fallback models in case of errors or quota limits
@@ -210,6 +210,24 @@ class GeminiAssistant:
                     contents=full_prompt.strip(),
                     config=config,
                 )
+
+                print("\n" + "=" * 80)
+
+                if response.candidates:
+
+                    candidate = response.candidates[0]
+
+                    print(
+                        "FINISH_REASON:",
+                        getattr(candidate, "finish_reason", None)
+                    )
+
+                    print(
+                        "ANSWER_LENGTH:",
+                        len(response.text or "")
+                    )
+
+                print("=" * 80)
                 self.model = current_model
 
                 logger.info(f"Successfully generated response "

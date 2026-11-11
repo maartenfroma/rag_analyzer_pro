@@ -24,8 +24,17 @@ load_dotenv()
 #
 st.set_page_config(page_title="RAG Analyze Pro", layout="wide")
 
-#
-st.title("RAG Analyze Pro")
+col1, col2 = st.columns([8,1])
+
+with col1:
+    st.title("RAG Analyze Pro")
+
+with col2:
+    if st.button("🔄 Reset"):
+        st.session_state.clear()
+        st.rerun()
+
+
 
 
 # Retrieve the Google API key from environment variables
@@ -58,8 +67,10 @@ for uploaded_file in uploaded_files:
 # Process the uploaded file using the appropriate processors
 if processors and len(processors) > 0:
 
-    current_files = sorted([f.name for f in uploaded_files])
+    current_files = [f.name for f in uploaded_files]
 
+    # Create a unique signature for the current set of uploaded files
+    #This is for creating a unique signature to track the current set of uploaded files
     current_signature="|".join(current_files) 
 
     if (
@@ -67,9 +78,9 @@ if processors and len(processors) > 0:
         or st.session_state["current_signature"] != current_signature
     ):
 
-        with st.spinner("Document is being processed..."):
+        with st.spinner("Documents are being processed..."):
 
-            st.write(f"PROCESSING: {current_files[0]}")
+            
 
             # Initialize the Gemini assistant and RAG engine
             assistant = GeminiAssistant()
@@ -102,6 +113,18 @@ if st.button("Submit Question"):
                 # Ask the RAG engine the question and get the answer and sources
                 answer, sources = st.session_state["rag_engine"].ask(question, k=3)
 
+                # Display the sources of the last retrieved documents
+                for doc in st.session_state["rag_engine"].last_retrieved_docs:
+
+                    page=doc.metadata.get("page_number", "?") if doc.metadata else None
+                    source = doc.metadata.get("file_name", "unknown") if doc.metadata else None
+                    chunk=doc.metadata.get("chunk_index", "?") if doc.metadata else None
+                    index=doc.metadata.get("index", "?") if doc.metadata else None
+
+                    # Display the source, chunk, and index of the retrieved document
+                    st.write(f"Source: {source}, Chunk: {chunk}, Index: {index}, Page: {page}")
+
+                
                 
                 chat_history = st.session_state["rag_engine"].get_chat_history()
 

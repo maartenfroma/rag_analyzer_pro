@@ -3,11 +3,12 @@ import os
 import tempfile
 from pathlib import Path
 from rag_components.processors.base.base_document_processor import BaseDocProcessor
-from langchain_community.document_loaders import UnstructuredPowerPointLoader
+import traceback
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma     
-from langchain_core.documents import Document   
+from langchain_core.documents import Document  
+from pptx import Presentation
 
 
 from rag_components.exceptions.document_exceptions import (
@@ -50,13 +51,38 @@ class PPTXProcessor(BaseDocProcessor):
 
     def extract_pages(self):
         try:
-            loader = UnstructuredPowerPointLoader(file_path=self.temp_path)
-            self.documents = loader.load()
+            presentation = Presentation(self.temp_path)
+            self.documents = []
+
+            for idx, slide in enumerate(presentation.slides, start=1):
+
+                slide_parts=[]
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        text=shape.text.strip()
+
+                        if text:
+                            slide_parts.append(text)
+                            slide_text="\n".join(slide_parts)
+
+                            if slide_text:
+                                metadata=MetadataHelper.build_metadata(
+                                    source="pptx",
+                                    file_name=self.file_name,
+                                    slide=idx)
+
+                                self.documents.append(Document
+                                                      (page_content=slide_text, 
+                                                       metadata=metadata))
+                    
+            
+                if not self.documents:
+                    raise DocumentLoadError(f"No pages extracted from PPTX file: {self.file_name}")
         except Exception as e:
-            raise DocumentLoadError(f"Error extracting pages from PPTX file: {self.file_name}") from e
-
+            raise DocumentLoadError(f"Error extracting pages from PPTX file: {self.file_name}") from e  
+    
         return self.documents
-
+    
     def split_documents(self):
         try:
             if not self.documents:
