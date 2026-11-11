@@ -2,7 +2,6 @@
 import os
 import tempfile
 from pathlib import Path
-import pandas as pd
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -16,7 +15,10 @@ from rag_components.exceptions.document_exceptions import (
 
 from rag_components.helpers.metadata_helper import MetadataHelper
 
+import traceback
 
+# Audio processor for handling audio files, transcription, 
+# and document creation    
 class AudioProcessor(BaseMediaProcessor):
 
     # Initialize the audio processor with file bytes, API key, model size, and chunk settings
@@ -28,7 +30,8 @@ class AudioProcessor(BaseMediaProcessor):
 
     def __init__(self, file_bytes: bytes, api_key:str, file_name: str, model_size="small", 
                  chunk_size=1000, chunk_overlap=200):
-        
+
+        # Initialize the audio processor and its attributes
         self.temp_file = None
         self.model = WhisperModel(model_size)
         self.transcript = None
@@ -53,6 +56,7 @@ class AudioProcessor(BaseMediaProcessor):
 
     def load_file(self, file_path=None):
 
+        # Load the audio file into a temporary file for processing
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
                 temp_file.write(self.file_bytes)
@@ -67,13 +71,30 @@ class AudioProcessor(BaseMediaProcessor):
     # Raises ValueError if the file is not loaded or does not exist
 
     def transcribe(self):
-        if not self.file_path:
-            raise ValueError("File not loaded. Call load_file() first.")
-        segments, _ = self.model.transcribe(self.file_path)
-        self.transcript = " ".join([segment.text for segment in segments])
-        self.segments = segments
 
-        return self.transcript  
+        # Start the transcription process
+        print("Starting transcription")
+
+    # Transcribe the audio file using the Whisper model
+        segments, _ = self.model.transcribe(
+            self.file_path
+        )
+        # Store the transcription segments for further processing
+        self.segments = list(segments)
+
+        print(
+            f"Segments found: {len(self.segments)}"
+        )
+
+        # Combine the transcription segments into a single transcript string    
+        self.transcript = " ".join(
+            segment.text
+            for segment in self.segments
+        )
+
+        print("Transcript completed")
+
+        return self.transcript
 
     # Split the transcript into chunks for further processing
     # Returns a list of text chunks
@@ -81,13 +102,16 @@ class AudioProcessor(BaseMediaProcessor):
 
     def create_documents(self):
 
+        # Ensure that the transcript is available before creating documents
         if not self.transcript:
             raise DocumentValidationError(
                 "Transcript not available. Call transcribe() first."
             )
 
+        # Initialize the list of documents to be created from the transcript
         self.documents = []
 
+        # Create documents for each transcription segment
         for i, segment in enumerate(self.segments):
             metadata = MetadataHelper.build_metadata(
                 source="audio",
@@ -97,6 +121,8 @@ class AudioProcessor(BaseMediaProcessor):
                 end_time=segment.end,
                 chunk_index=len(self.documents)
             )
+
+            # Build the metadata for the current transcription segment
             self.documents.append(
                 Document(
                     page_content=segment.text,
@@ -104,10 +130,13 @@ class AudioProcessor(BaseMediaProcessor):
                 )
             )
 
+        # Return the list of created documents
         return self.documents
 
+    # Split the created documents into smaller chunks for processing
     def split_documents(self):
 
+        # Ensure that there are documents available to split
         if not self.documents:
             raise DocumentValidationError(
                  "No documents available."
@@ -118,27 +147,35 @@ class AudioProcessor(BaseMediaProcessor):
             separators=["\n\n", "\n", " ", ""]
             )
 
+        # Split the documents into chunks using the text splitter
         self.chunks = text_splitter.split_documents(
         self.documents
          )
 
+        # Return the list of chunks created from the documents
         return self.chunks
     
 
 
+    # Create a vector store from the chunks for retrieval
+    # Raises DocumentSplitError if no chunks are available
+    # Returns the created vector store for retrieval
     def create_vector_store(self):
 
+        # Ensure that there are chunks available before creating the vector store
         if not self.chunks:
             raise DocumentSplitError(
                 "No chunks available. Call split_documents() first."
             )
 
+        # Initialize the embeddings for the vector store
         embeddings = GoogleGenerativeAIEmbeddings(
         model="models/gemini-embedding-001",
         google_api_key=self.api_key,
         task_type="retrieval_document"
         )
 
+        # Check if the database file already exists and load or create the vector store accordingly
         if os.path.exists(self.DB_PATH):
             print("Loading existing database file:", self.DB_PATH)
             self.vector_store = Chroma(
@@ -152,12 +189,46 @@ class AudioProcessor(BaseMediaProcessor):
                 embedding=embeddings,
                 persist_directory=self.DB_PATH
             )
+
+        # Return the created vector store for retrieval 
         return self.vector_store
+
     
+    # Process the audio file through all steps: load, transcribe, create documents, split, and create vector store
+    # Returns the vector store, number of documents, and number of chunks if successful
+    # Handles and prints errors for each processing step    
     def process(self):
 
         try:
             os.environ["GOOGLE_API_KEY"] = self.api_key
+
+            # Check if the database file already exists 
+            # and load it if available
+
+            if os.path.exists(self.DB_PATH):
+                print("Database file exists:", self.DB_PATH)
+
+                # Load the existing vector store from the database file
+                embeddings = GoogleGenerativeAIEmbeddings(
+                    model="models/gemini-embedding-001",
+                    google_api_key=self.api_key,
+                    task_type="retrieval_document"
+                )
+
+                self.vector_store = Chroma(
+                    persist_directory=self.DB_PATH,
+                    embedding_function=embeddings,
+                )
+
+                print(
+                "Collection count:",
+                self.vector_store._collection)
+
+                return (
+                self.vector_store,
+                0,
+                self.vector_store._collection.count()
+            )
 
             self.load_file()
             self.transcribe()
@@ -171,7 +242,10 @@ class AudioProcessor(BaseMediaProcessor):
             print(f"Error processing audio file: {e}")
             return None
         except Exception as e:
+            
             print(f"Unexpected error processing audio file: {e}")
+            traceback.print_exc()
+            
             return None
         
         finally:

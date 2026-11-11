@@ -16,6 +16,7 @@ import os
 from rag_components.ai_assistants.gemini_ai_assistant import GeminiAssistant
 from rag_components.core.rag_engine import RAGEngine
 from rag_components.factories.processor_factory import ProcessorFactory
+from rag_components.helpers.meta_display_helper import MetaDisplayHelper
 from dotenv import load_dotenv
 
 # Load environment variables from the .env file
@@ -100,53 +101,93 @@ if processors and len(processors) > 0:
 # Display the RAG engine interface if it has been initialized
 if "rag_engine" in st.session_state:
 
+    # Get the user's question and analysis mode for the RAG engine
     question = st.text_input("Ask a question to the RAG engine:")
+
+    # Get the user's question and analysis mode for the RAG engine
+    search_mode=st.selectbox("Analysis Mode",
+                                [
+                                    "⚡ Fast",
+                                    "⚖️ Balanced",
+                                    "🔎 Deep Analysis"
+                                ])
+
+
+    
+    # Map the analysis mode to the number of top documents to retrieve  
+    k_map = {
+        "⚡ Fast": 3,
+        "⚖️ Balanced": 10,
+        "🔎 Deep Analysis": 20,
+    }
+
+    # Get the number of top documents to retrieve based on the selected analysis mode
+    k = k_map.get(search_mode, 10)      
+    
 
 else:
     st.warning("Please upload a file to initialize the RAG engine.")
+
+   
+
+
+    
 
 # Submit the question to the RAG engine when the button is clicked
 if st.button("Submit Question"):
         if question:
             with st.spinner("Getting answer from RAG engine..."):
 
+        
                 # Ask the RAG engine the question and get the answer and sources
-                answer, sources = st.session_state["rag_engine"].ask(question, k=3)
+                answer, sources = st.session_state["rag_engine"].ask(question, k=k)
 
-                # Display the sources of the last retrieved documents
-                for doc in st.session_state["rag_engine"].last_retrieved_docs:
+                with st.chat_message("assistant"):
+                    st.write(answer)
 
-                    page=doc.metadata.get("page_number", "?") if doc.metadata else None
-                    source = doc.metadata.get("file_name", "unknown") if doc.metadata else None
-                    chunk=doc.metadata.get("chunk_index", "?") if doc.metadata else None
-                    index=doc.metadata.get("index", "?") if doc.metadata else None
-
-                    # Display the source, chunk, and index of the retrieved document
-                    st.write(f"Source: {source}, Chunk: {chunk}, Index: {index}, Page: {page}")
+                with st.expander(f"📚 Sources Used ({len(st.session_state['rag_engine'].last_retrieved_docs)})"):
+                
 
                 
-                
-                chat_history = st.session_state["rag_engine"].get_chat_history()
+                    # Display the sources of the last retrieved documents
+                    for doc in st.session_state["rag_engine"].last_retrieved_docs:
+                       
+                       # Display the metadata and a snippet of the 
+                       # document content
 
-                for entry in chat_history:
-                    with st.chat_message("user"):
-                        st.write(f"Question: {entry['query']}")
-                    with st.chat_message("assistant"):
-                        st.write(f"Answer: {entry['response']}")
+                       st.markdown(f"**{MetaDisplayHelper.format(doc.metadata)}**")
 
-                # Display the chat history below the answer and sources
-                st.subheader("Chat History")
-                for i, entry in enumerate(chat_history, start=1):
-                    st.write(f"Question{i}: {entry['query']}")
-                    st.write(f"Answer{i}: {entry['response']}")
+                       # Display a snippet of the document content
+                       st.caption(doc.page_content[:350]+"...")
 
-                # Button to clear the chat history
-                if st.button("Clear Chat History"):
-                    st.session_state["rag_engine"].clear_chat_history()
-                    st.experimental_rerun()
+                       st.divider()
+                       
 
- 
-                
+
+if "rag_engine" in st.session_state:
+    chat_history = st.session_state["rag_engine"].get_chat_history()
+
+
+    # Display the chat history in the chat interface
+    for entry in chat_history:
+        with st.chat_message("user"):
+            st.write(f"Question: {entry['query']}")
+        with st.chat_message("assistant"):
+            st.write(f"Answer: {entry['response']}")
+
+    # Display the chat history below the answer and sources
+    st.subheader("Chat History")
+    for i, entry in enumerate(chat_history, start=1):
+        st.write(f"Question{i}: {entry['query']}")
+        st.write(f"Answer{i}: {entry['response']}")
+
+    # Button to clear the chat history
+    if st.button("Clear Chat History"):
+        st.session_state["rag_engine"].clear_chat_history()
+        st.experimental_rerun()
+
+
+
 
 
 

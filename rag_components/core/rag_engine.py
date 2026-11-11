@@ -54,7 +54,17 @@ class RAGEngine:
             if not hasattr(processor, "process"):
                 continue    
 
-            vector_store, docs, chunks = processor.process()
+            result = processor.process()
+
+            if result is None:
+                print(f"Processor {processor} returned None, skipping.")
+                print(f"{processor.__class__.__name__}")
+
+
+            if result is None:
+                continue
+
+            vector_store, docs, chunks = result
 
             self.vector_stores.append(vector_store)
 
