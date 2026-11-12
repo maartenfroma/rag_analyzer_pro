@@ -1,28 +1,26 @@
 from abc import ABC, abstractmethod
 
-class BaseMediaProcessor(ABC): 
 
+class BaseMediaProcessor(ABC):
 
     @abstractmethod
     def load_file(self):
-            pass
-    
-    
+        pass
+
     @abstractmethod
     def transcribe(self):
-            pass
+        pass
 
     @abstractmethod
     def create_documents(self):
-            pass     
+        pass
 
     def split_documents(self):
-            pass
+        pass
 
     def create_vector_store(self):
-            pass
-    
+        pass
+
     @abstractmethod
     def process(self):
-            pass
-   
+        pass

@@ -1,6 +1,10 @@
 
+from importlib.metadata import metadata
 import sys
 from pathlib import Path
+import json
+
+
 
 # Set up the root directory for the project and add it to the system path
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -17,7 +21,12 @@ from rag_components.ai_assistants.gemini_ai_assistant import GeminiAssistant
 from rag_components.core.rag_engine import RAGEngine
 from rag_components.factories.processor_factory import ProcessorFactory
 from rag_components.helpers.meta_display_helper import MetaDisplayHelper
+from rag_components.helpers.export_file_helper import ChatHistoryExporter
+from rag_components.helpers.pdf_exporter import PdfExporter
 from dotenv import load_dotenv
+
+from io import BytesIO
+import pandas as pd
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -49,11 +58,11 @@ uploaded_files = st.file_uploader("Choose files", [".pdf", ".docx", ".csv",
                                                    ".pptx", ".mp4"],
                                                    accept_multiple_files=True)
 
+print("CREATING PROCESSORS")
 processors=[]
 
 # Check if any files have been uploaded and process them accordingly
 for uploaded_file in uploaded_files:
-    extensions = "." + uploaded_file.name.split(".")[-1].lower()
 
 
     try:
@@ -89,6 +98,8 @@ if processors and len(processors) > 0:
             # Create the RAG engine with the assistant
             st.session_state["rag_engine"] = RAGEngine(assistant=assistant)
 
+            print("LOADING PROCESSORS")
+
             # Load the processors into the RAG engine and get the documents and chunks
             docs, chunks = st.session_state["rag_engine"].load_processors(processors)
 
@@ -101,91 +112,163 @@ if processors and len(processors) > 0:
 # Display the RAG engine interface if it has been initialized
 if "rag_engine" in st.session_state:
 
-    # Get the user's question and analysis mode for the RAG engine
-    question = st.text_input("Ask a question to the RAG engine:")
+    question = st.text_input(
+        "Ask a question to the RAG engine:"
+    )
 
-    # Get the user's question and analysis mode for the RAG engine
-    search_mode=st.selectbox("Analysis Mode",
-                                [
-                                    "⚡ Fast",
-                                    "⚖️ Balanced",
-                                    "🔎 Deep Analysis"
-                                ])
+    search_mode = st.selectbox(
+        "Analysis Mode",
+        [
+            "⚡ Fast",
+            "⚖️ Balanced",
+            "🔎 Deep Analysis"
+        ],
+        help="""
+        Fast: snel antwoord
+        Balanced: beste balans
+        Deep Analysis: meer bronnen en context
+        """
+    )
 
-
-    
-    # Map the analysis mode to the number of top documents to retrieve  
     k_map = {
         "⚡ Fast": 3,
         "⚖️ Balanced": 10,
         "🔎 Deep Analysis": 20,
     }
 
-    # Get the number of top documents to retrieve based on the selected analysis mode
-    k = k_map.get(search_mode, 10)      
-    
+    k = k_map.get(search_mode, 10)
+
+    if st.button("Submit Question") and question:
+
+        with st.spinner(
+            "Getting answer from RAG engine..."
+        ):
+
+            #
+            answer, sources = (
+                st.session_state["rag_engine"]
+                .ask(question, k=k)
+            )
+            
+            # Export the chat history for the current question and answer
+            ChatHistoryExporter.export(
+                question=question,
+                answer=answer,
+                metadata=[doc.metadata for doc in st.session_state["rag_engine"].last_retrieved_docs]
+            )
+
+            
+            with st.chat_message("assistant"):
+                
+                # Display the answer from the RAG engine
+                st.write(answer)
+
+                # Display the sources used for the answer
+                st.write(f"📚 Sources Used ({len(st.session_state['rag_engine'].last_retrieved_docs)})")
+            
+                #
+                
+                for idx,doc in enumerate(st.session_state["rag_engine"].last_retrieved_docs,start=1):
+                    
+                    with st.expander("View Document Details"):
+                    
+                                            # Format and display the metadata for the document
+                                            meta = MetaDisplayHelper.format(doc.metadata)
+                                         
+                                            st.json(doc.metadata)
+                                            
+                                               
+                    
+                                            st.caption(
+                                                doc.page_content[:500] + "..."
+                                            )
+                    
+                                            st.divider()
+
+
+
+                 
 
 else:
-    st.warning("Please upload a file to initialize the RAG engine.")
 
-   
-
-
-    
-
-# Submit the question to the RAG engine when the button is clicked
-if st.button("Submit Question"):
-        if question:
-            with st.spinner("Getting answer from RAG engine..."):
-
-        
-                # Ask the RAG engine the question and get the answer and sources
-                answer, sources = st.session_state["rag_engine"].ask(question, k=k)
-
-                with st.chat_message("assistant"):
-                    st.write(answer)
-
-                with st.expander(f"📚 Sources Used ({len(st.session_state['rag_engine'].last_retrieved_docs)})"):
-                
-
-                
-                    # Display the sources of the last retrieved documents
-                    for doc in st.session_state["rag_engine"].last_retrieved_docs:
-                       
-                       # Display the metadata and a snippet of the 
-                       # document content
-
-                       st.markdown(f"**{MetaDisplayHelper.format(doc.metadata)}**")
-
-                       # Display a snippet of the document content
-                       st.caption(doc.page_content[:350]+"...")
-
-                       st.divider()
+    st.warning(
+        "Please upload a file to initialize the RAG engine."
+    )
                        
 
 
 if "rag_engine" in st.session_state:
+    
+    # Retrieve the chat history from the RAG engine
     chat_history = st.session_state["rag_engine"].get_chat_history()
-
-
+    
+    
     # Display the chat history in the chat interface
     for entry in chat_history:
         with st.chat_message("user"):
-            st.write(f"Question: {entry['query']}")
+            st.write(entry['query'])
         with st.chat_message("assistant"):
-            st.write(f"Answer: {entry['response']}")
+            st.write(entry['response'])
+            
+    if chat_history:
+        
+        df=pd.DataFrame(chat_history)
+        
+        st.divider()
+        
+        st.subheader("📤 Export Chat History")
+        
+        json_data=json.dumps(chat_history, indent=4,
+                              ensure_ascii=False)
+        
+        col1, col2, col3= st.columns(3)
+        
+        # Export buttons for JSON, Excel, and PDF
+        
+        with col1:
+            st.download_button(
+                label="📋 Export JSON",
+                data=json_data,
+                file_name="chat_history.json",
+                mime="application/json"
+            )
+        # Export Excel button
+        with col2:
 
-    # Display the chat history below the answer and sources
-    st.subheader("Chat History")
-    for i, entry in enumerate(chat_history, start=1):
-        st.write(f"Question{i}: {entry['query']}")
-        st.write(f"Answer{i}: {entry['response']}")
+            excel_buffer = BytesIO()
 
-    # Button to clear the chat history
-    if st.button("Clear Chat History"):
-        st.session_state["rag_engine"].clear_chat_history()
-        st.experimental_rerun()
+            with pd.ExcelWriter(
+                excel_buffer,
+                engine="openpyxl"
+            ) as writer:
 
+                df.to_excel(
+                    writer,
+                    sheet_name="Chat History",
+                    index=False
+                )
+
+            excel_buffer.seek(0)
+
+            st.download_button(
+                label="📊 Export Excel",
+                data=excel_buffer,
+                file_name="chat_history.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+                        
+        # Export PDF button
+        with col3:
+            
+            pdf=PdfExporter.export(chat_history)
+            st.download_button(
+                label="📄 Export PDF",
+                data=pdf,
+                file_name="chat_history.pdf",
+                mime="application/pdf"
+            )
+
+    
 
 
 

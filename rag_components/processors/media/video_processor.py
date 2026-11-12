@@ -13,39 +13,55 @@ from moviepy import VideoFileClip
 from rag_components.processors.base.base_media_processor import BaseMediaProcessor
 
 from rag_components.exceptions.document_exceptions import (
-    DocumentLoadError, DocumentSplitError, 
-    DocumentValidationError, DocumentSaveError)
+    DocumentLoadError,
+    DocumentSplitError,
+    DocumentValidationError,
+    DocumentSaveError,
+)
 
 from rag_components.helpers.metadata_helper import MetadataHelper
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class VideoProcessor(BaseMediaProcessor):
 
-    def __init__(self, file_bytes: bytes, api_key:str, file_name: str, model_size="small", 
-                 chunk_size=1000, chunk_overlap=200):
-        
+    def __init__(
+        self,
+        file_bytes: bytes,
+        api_key: str,
+        file_name: str,
+        model_size="small",
+        chunk_size=1000,
+        chunk_overlap=200,
+    ):
+
         self.temp_file = None
         self.model = WhisperModel(model_size)
         self.transcript = None
         self.chunks = None
-        self.vector_store = None    
+        self.segments = None
+        self.vector_store = None
         self.file_bytes = file_bytes
         self.video_path = None
         self.audio_path = None
         self.api_key = api_key
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.documents = []     
+        self.documents = []
         self.file_name = file_name
-        self.DB_PATH = os.path.join(
-                 "chroma.sqlite3",
-                Path(self.file_name).stem)
+        self.DB_PATH = os.path.join("chroma.sqlite3", Path(self.file_name).stem)
 
     # Load the video file from the given path or from the temporary file if no path is provided
     # file_path: Path to the video file. If None, the temporary file will be used.
 
     def load_file(self, file_path=None):
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(self.file_name).suffix) as temp_file:
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=Path(self.file_name).suffix
+            ) as temp_file:
                 temp_file.write(self.file_bytes)
                 temp_file.flush()
                 self.video_path = temp_file.name
@@ -53,7 +69,6 @@ class VideoProcessor(BaseMediaProcessor):
         except Exception as e:
             raise DocumentLoadError("Failed to load video file.") from e
 
-    
     # Extract audio from the loaded video file
     # Returns the path to the extracted audio file
     # Raises ValueError if the video file is not loaded
@@ -61,26 +76,19 @@ class VideoProcessor(BaseMediaProcessor):
 
         if not self.video_path:
             raise ValueError("File not loaded. Call load_file() first.")
-        audio_temp = tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".wav"
-        )
+        audio_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
 
         audio_temp.close()
 
         video = VideoFileClip(self.video_path)
 
-        video.audio.write_audiofile(
-            audio_temp.name,
-            logger=None
-        )
+        video.audio.write_audiofile(audio_temp.name, logger=None)
 
         video.close()
 
         self.audio_path = audio_temp.name
 
         return self.audio_path
-    
 
     # Transcribe the loaded video file into text
     # Returns the transcript as a string
@@ -89,40 +97,39 @@ class VideoProcessor(BaseMediaProcessor):
     def transcribe(self):
         if not self.audio_path:
             raise ValueError("Audio not extracted. Call extract_audio() first.")
-        segments, _ = self.model.transcribe(self.audio_path)
-        self.transcript = " ".join([segment.text for segment in segments])
-        
-        return self.transcript  
 
+        segments, _ = self.model.transcribe(self.audio_path)
+
+        self.segments = list(segments)
+
+        self.transcript = " ".join(seg.text for seg in self.segments)
+
+        # Return the generated transcript as a string
+        return self.transcript
+    
     # Create documents from the transcript
     # Returns a list of Document objects
     # Raises ValueError if the transcript is not available
 
     def create_documents(self):
+
+        logger.info("Creating documents from transcript.")
         if not self.transcript:
-            raise DocumentValidationError("Transcript not available. " \
-            "Call transcribe() first.")
-
-        segments, _ = self.model.transcribe(self.audio_path)    
-        self.documents = []
-
-        # Create documents for each segment with metadata
-        for i, segment in enumerate(segments):
-            metadata = MetadataHelper.build_metadata(
-                source="video",
-                file_name=self.file_name,
-                index=i,
-                start_time=segment.start,
-                end_time=segment.end,
-                chunk_index=len(self.documents)
+            raise DocumentValidationError(
+                "Transcript not available. " "Call transcribe() first."
             )
-            self.documents.append(
-                Document(
-                    page_content=segment.text,
-                    metadata=metadata
-                )
-            )
+    
 
+        logger.info("Creating document from full text.")
+        document = Document(
+            page_content=self.transcript,
+            metadata=MetadataHelper.build_metadata(
+                source="video", file_name=self.file_name
+            ),
+        )
+
+        self.documents = [document]
+        logger.info("Document created successfully.")
         return self.documents
 
     # Split the documents into chunks for further processing
@@ -131,15 +138,23 @@ class VideoProcessor(BaseMediaProcessor):
 
     def split_documents(self):
         if not self.documents:
-            raise DocumentValidationError("No documents available. Call create_documents() first.")
+            raise DocumentValidationError(
+                "No documents available. Call create_documents() first."
+            )
 
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
-            separators=["\n\n", "\n", " ", ""]
+            separators=["\n\n", "\n", " ", ""],
         )
 
         self.chunks = text_splitter.split_documents(self.documents)
+
+        logger.info("Number of chunks created: %d", len(self.chunks))
+
+        for chunk in self.chunks[:5]:
+            logger.info("Chunk preview: %s", chunk.page_content[:500])
+
         return self.chunks
 
     # Create a vector store from the chunks
@@ -148,26 +163,28 @@ class VideoProcessor(BaseMediaProcessor):
 
     def create_vector_store(self):
         if not self.chunks:
-            raise DocumentSplitError("No chunks available. Call split_documents() first.")
+            raise DocumentSplitError(
+                "No chunks available. Call split_documents() first."
+            )
 
         embeddings = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001",
             google_api_key=self.api_key,
-            task_type="retrieval_document"
+            task_type="retrieval_document",
         )
 
         if os.path.exists(self.DB_PATH):
-            print("Loading existing database file:", self.DB_PATH)
+            logger.info("Loading existing database file: %s", self.DB_PATH)
             self.vector_store = Chroma(
-             persist_directory=self.DB_PATH,
-             embedding_function=embeddings,
-              )
+                persist_directory=self.DB_PATH,
+                embedding_function=embeddings,
+            )
         else:
-            print("Creating new database file:", self.DB_PATH)
+            logger.info("Creating new database file: %s", self.DB_PATH)
             self.vector_store = Chroma.from_documents(
                 documents=self.chunks,
                 embedding=embeddings,
-                persist_directory=self.DB_PATH
+                persist_directory=self.DB_PATH,
             )
         return self.vector_store
 
@@ -179,23 +196,47 @@ class VideoProcessor(BaseMediaProcessor):
         try:
             os.environ["GOOGLE_API_KEY"] = self.api_key
 
+            if os.path.exists(self.DB_PATH):
+                logger.info("Chroma database path exists: %s", self.DB_PATH)
+                embeddings = GoogleGenerativeAIEmbeddings(
+                    model="models/gemini-embedding-001",
+                    google_api_key=self.api_key,
+                    task_type="retrieval_document",
+                )
+                self.vector_store = Chroma(
+                    persist_directory=self.DB_PATH,
+                    embedding_function=embeddings,
+                )
+                return self.vector_store, 0, self.vector_store._collection.count()
+
+            
             self.load_file()
+            logger.info("Video file loaded successfully.")
+
             self.extract_audio()
+            logger.info("Extracting audio from video.")
             self.transcribe()
+            logger.info("Transcription completed successfully.")
             self.create_documents()
+            logger.info("Documents created successfully.")
             self.split_documents()
+            logger.info("Documents split into chunks successfully.")
             self.create_vector_store()
+            logger.info("Vector store created successfully.")
 
             return self.vector_store, len(self.documents), len(self.chunks)
 
-        except (DocumentLoadError, DocumentValidationError, DocumentSplitError, DocumentSaveError) as e:
-            print(f"Error processing video file: {e}")
+        except (
+            DocumentLoadError,
+            DocumentValidationError,
+            DocumentSplitError,
+            DocumentSaveError,
+        ) as e:
+            logger.error("Error processing video file: %s", e)
             return None
         except Exception as e:
-            print(f"Unexpected error processing video file: {e}")
+            logger.error("Unexpected error processing video file: %s", e)
             return None
-            
-           
 
         finally:
             if self.video_path and os.path.exists(self.video_path):
@@ -203,9 +244,10 @@ class VideoProcessor(BaseMediaProcessor):
             if self.audio_path and os.path.exists(self.audio_path):
                 os.remove(self.audio_path)
 
-
     def __str__(self):
-        return f"VideoProcessor(video_path={self.video_path}, " \
-               f"chunks={'available' if self.chunks else 'not available'}, " \
-               f"transcript={'available' if self.transcript else 'not available'}, " \
-               f"vector_store={'available' if self.vector_store else 'not available'})"
+        return (
+            f"VideoProcessor(video_path={self.video_path}, "
+            f"chunks={'available' if self.chunks else 'not available'}, "
+            f"transcript={'available' if self.transcript else 'not available'}, "
+            f"vector_store={'available' if self.vector_store else 'not available'})"
+        )
