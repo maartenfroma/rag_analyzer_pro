@@ -33,12 +33,13 @@ import pandas as pd
 load_dotenv()
 
 #
-st.set_page_config(page_title="RAG Analyze Pro", layout="wide")
+st.set_page_config(page_title="RAG Analyzer Pro", layout="wide")
 
 col1, col2 = st.columns([8,1])
 
 with col1:
-    st.title("RAG Analyze Pro")
+    st.title("RAG Analyzer Pro")
+    st.caption("Analyze your documents with RAG Analyzer Pro AI assistant")
 
 with col2:
     if st.button("🔄 Reset"):
