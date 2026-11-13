@@ -1,4 +1,5 @@
 
+from datetime import datetime
 from importlib.metadata import metadata
 import sys
 from pathlib import Path
@@ -196,9 +197,21 @@ else:
     )
                        
 
-
+current_filename="this_file"
 if "rag_engine" in st.session_state:
     
+    engine=st.session_state["rag_engine"]
+    
+    if hasattr(engine, "last_retrieved_docs") and engine.last_retrieved_docs:
+        first_doc = engine.last_retrieved_docs[0]
+        source = first_doc.metadata.get(f"file_name")
+        current_file_name = "this_file"
+        if source:
+            current_file_name = (
+                str(source).split("/")[-1].split("\\")[-1].rsplit(".", 1)[0]
+            )
+        st.session_state["current_file_name"] = current_file_name
+        
     # Retrieve the chat history from the RAG engine
     chat_history = st.session_state["rag_engine"].get_chat_history()
     
@@ -226,14 +239,20 @@ if "rag_engine" in st.session_state:
         # Export buttons for JSON, Excel, and PDF
         
         with col1:
+            
+            
+            current_date = datetime.now().strftime("%Y-%m-%d")
             st.download_button(
                 label="📋 Export JSON",
                 data=json_data,
-                file_name="chat_history.json",
+                file_name=f"chat_history_{current_file_name}_{current_date}.json",
                 mime="application/json"
             )
         # Export Excel button
         with col2:
+            
+            
+            current_date = datetime.now().strftime("%Y-%m-%d")
 
             excel_buffer = BytesIO()
 
@@ -253,18 +272,23 @@ if "rag_engine" in st.session_state:
             st.download_button(
                 label="📊 Export Excel",
                 data=excel_buffer,
-                file_name="chat_history.xlsx",
+                file_name=f"chat_history_{current_file_name}_{current_date}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
                         
         # Export PDF button
         with col3:
             
+            # Get the current file name and date for the PDF file name
+            current_file_name = st.session_state.get("current_file_name", "chat_history")
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            
+            # Generate the PDF using the chat history
             pdf=PdfExporter.export(chat_history)
             st.download_button(
                 label="📄 Export PDF",
                 data=pdf,
-                file_name="chat_history.pdf",
+                file_name=f"chat_history_{current_file_name}_{current_date}.pdf",
                 mime="application/pdf"
             )
 
