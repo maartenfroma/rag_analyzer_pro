@@ -39,7 +39,7 @@ col1, col2 = st.columns([8,1])
 
 with col1:
     st.title("RAG Analyzer Pro")
-    st.caption("Analyze your documents with RAG Analyzer Pro AI assistant")
+    st.caption("Interact with your documents using RAG Analyzer Pro and export the results")
 
 with col2:
     if st.button("🔄 Reset"):
