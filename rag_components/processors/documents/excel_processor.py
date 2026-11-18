@@ -30,8 +30,8 @@ class ExcelProcessor(BaseDocProcessor):
         file_bytes,
         api_key: str,
         file_name: str,
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200,
+        chunk_size: int = 2500,
+        chunk_overlap: int = 100,
     ):
         self.file_bytes = file_bytes
         self.api_key = api_key
@@ -136,10 +136,18 @@ class ExcelProcessor(BaseDocProcessor):
             )
             if os.path.exists(self.DB_PATH):
                 logger.info("Loading existing database file: %s", self.DB_PATH)
-                self.vector_store = Chroma(
-                    persist_directory=self.DB_PATH,
-                    embedding_function=embeddings,
-                )
+                
+                
+                try:
+                    self.vector_store = Chroma(
+                        persist_directory=self.DB_PATH,
+                        embedding_function=embeddings,
+                    )
+                except Exception as e:
+                    raise DocumentSaveError(
+                        f"Error loading existing vector store: {self.file_name}"
+                    ) from e    
+                    
             else:
                 logger.info("Creating new database file: %s", self.DB_PATH)
                 self.vector_store = Chroma.from_documents(

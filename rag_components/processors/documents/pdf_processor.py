@@ -129,11 +129,17 @@ class PdfProcessor(BaseDocProcessor):
             else:
                 logger.info("Creating new vector store: %s", self.DB_PATH)
                 os.makedirs(self.DB_PATH, exist_ok=True)
-                self.vector_store = Chroma.from_documents(
-                    documents=self.chunks,
-                    embedding=embeddings,
-                    persist_directory=self.DB_PATH,
-                )
+                
+                try:
+                    self.vector_store = Chroma.from_documents(
+                        documents=self.chunks,
+                        embedding=embeddings,
+                        persist_directory=self.DB_PATH,
+                    )
+                except Exception as e:
+                    raise DocumentSaveError(
+                        f"Error creating vector store from PDF chunks: {self.file_name}"
+                    ) from e
                 return self.vector_store
 
         except Exception as e:

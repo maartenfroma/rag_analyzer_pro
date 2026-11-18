@@ -2,6 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 import pandas as pd
+
 from rag_components.processors.base.base_document_processor import BaseDocProcessor
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -23,14 +24,17 @@ logger = logging.getLogger(__name__)
 
 
 class CsvProcessor(BaseDocProcessor):
+    
+    MAX_ROWS = 2000
+    MAX_CHUNKS = 500
 
     def __init__(
         self,
         file_bytes,
         api_key: str,
         file_name: str,
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200,
+        chunk_size: int = 5000,
+        chunk_overlap: int = 50,
     ):
         self.file_bytes = file_bytes
         self.api_key = api_key
@@ -60,6 +64,12 @@ class CsvProcessor(BaseDocProcessor):
         try:
             self.documents = []
             df = pd.read_csv(self.temp_path)
+            if len(df) > self.MAX_ROWS:
+                df = df.head(self.MAX_ROWS)
+            if len(df) == 0:
+                raise DocumentValidationError(
+                    f"CSV file is empty after applying MAX_ROWS limit: {self.file_name}"
+                )
             self.documents.append(
                 Document(
                     page_content=df.to_csv(index=False),
@@ -84,7 +94,10 @@ class CsvProcessor(BaseDocProcessor):
                 chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
             )
             self.chunks = []
+            
             for i, doc in enumerate(self.documents):
+                
+                
                 text = doc.page_content
                 for chunk in text_splitter.split_text(text):
                     metadata = MetadataHelper.build_metadata(
@@ -96,8 +109,15 @@ class CsvProcessor(BaseDocProcessor):
                     logger.info(doc.metadata)
                     # Append the chunk with its metadata to the list
                     # of chunks
-                    self.chunks.append(Document(page_content=chunk, metadata=metadata))
+                    
+                    if len(self.chunks) < self.MAX_CHUNKS:
+                        self.chunks.append(Document(page_content=chunk, metadata=metadata))
+                        
+                    else:
+                        logger.info("Reached MAX_CHUNKS limit for chunks. Stopping further chunking.")
+                        break
 
+        
         except Exception as e:
             raise DocumentSplitError(
                 f"Error splitting CSV documents: {self.file_name}"
@@ -135,18 +155,29 @@ class CsvProcessor(BaseDocProcessor):
             else:
                 logger.info(f"Creating new vector store {self.DB_PATH}.")
                 os.makedirs(self.DB_PATH, exist_ok=True)
-                self.vector_store = Chroma.from_documents(
-                    documents=self.chunks,
-                    embedding=embeddings,
-                    persist_directory=self.DB_PATH,
-                )
-                return self.vector_store
-
+                
+                # Create the vector store from the document chunks and persist it to 
+                # the Chroma database
+                
+                try:
+                    self.vector_store = Chroma.from_documents(
+                        documents=self.chunks,
+                        embedding=embeddings,
+                        persist_directory=self.DB_PATH,
+                    )
+                        
+                except Exception as e:
+                    raise DocumentSaveError(
+                        f"Error creating vector store from CSV chunks: {self.file_name}"
+                    ) from e
+                    
         except Exception as e:
             raise DocumentSaveError(
                 f"Error creating vector store from CSV chunks: {self.file_name}"
             ) from e
-
+        return self.vector_store
+   
+   
     def process(self):
 
         try:

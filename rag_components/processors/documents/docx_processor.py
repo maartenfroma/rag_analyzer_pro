@@ -128,11 +128,23 @@ class DocxProcessor(BaseDocProcessor):
                 )
             else:
                 logger.info("Creating new database file: %s", self.DB_PATH)
-                self.vector_store = Chroma.from_documents(
-                    documents=self.chunks,
-                    embedding=embeddings,
-                    persist_directory=self.DB_PATH,
-                )
+                
+                try:
+                    self.vector_store = Chroma.from_documents(
+                        documents=self.chunks,
+                        embedding=embeddings,
+                        persist_directory=self.DB_PATH,
+                    )
+                except Exception as e:
+                    raise DocumentSaveError(
+                        f"Error creating vector store from DOCX chunks: {self.file_name}"
+                    ) from e
+               
+                # self.vector_store = Chroma.from_documents(
+                #     documents=self.chunks,
+                #     embedding=embeddings,
+                #     persist_directory=self.DB_PATH,
+                # )
         except Exception as e:
             raise DocumentSaveError(
                 f"Error creating vector store from DOCX chunks: {self.file_name}"

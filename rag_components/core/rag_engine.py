@@ -70,6 +70,11 @@ class RAGEngine:
             total_documents += docs
             total_chunks += chunks
 
+        logger.info("Total documents loaded: %d", total_documents)
+        logger.info("Total chunks loaded: %d", total_chunks)
+        
+        # Returns the total number of documents and chunks loaded into the RAG engine
+        # Data type: tuple[int, int] representing total documents and total chunks loaded
         return total_documents, total_chunks
 
     # Retrieve content from the vector store based on a query
@@ -134,6 +139,7 @@ class RAGEngine:
                         f"{' | ' + meta_info if meta_info else ''}\n"
                         f"{doc.page_content}"
                     )
+                    
 
             # Store the unique documents as the last retrieved documents
             # for reference

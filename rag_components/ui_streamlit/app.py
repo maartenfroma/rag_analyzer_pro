@@ -1,10 +1,9 @@
+from io import BytesIO
+import pandas as pd
 
-from datetime import datetime
-from importlib.metadata import metadata
 import sys
 from pathlib import Path
 import json
-
 
 
 # Set up the root directory for the project and add it to the system path
@@ -13,38 +12,148 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-import streamlit as st
-import os
 
-
+from rag_components.models.doc_data_model import DocData
+from rag_components.models.chat_data_model import ChatData
+from rag_components.db_manager.chat_repository import ChatRepository
+from rag_components.db_manager.document_repository import DocumentRepository
+from datetime import datetime
 
 from rag_components.ai_assistants.gemini_ai_assistant import GeminiAssistant
 from rag_components.core.rag_engine import RAGEngine
 from rag_components.factories.processor_factory import ProcessorFactory
-from rag_components.helpers.meta_display_helper import MetaDisplayHelper
-from rag_components.helpers.export_file_helper import ChatHistoryExporter
-from rag_components.helpers.pdf_exporter import PdfExporter
+from rag_components.chat_exporter.main_exporter import MainExporter
+
+from rag_components.db_manager.table_manager import DBCreateTable
+
+from rag_components.helpers.initialize_metrics_session import initialize_metrics_session
+
 from dotenv import load_dotenv
 
-from io import BytesIO
-import pandas as pd
+
+import streamlit as st
+import os
+
 
 # Load environment variables from the .env file
 load_dotenv()
 
-#
+
+#Set up the Streamlit page configuration and initialize the metrics session
 st.set_page_config(page_title="RAG Analyzer Pro", layout="wide")
+
+# Create necessary database tables if they do not exist
+DBCreateTable.create_table_documents()
+DBCreateTable.create_table_chat()
+ 
+if "db_initialized" not in st.session_state:
+
+    DocumentRepository.delete_all()
+    ChatRepository.delete_all()
+
+    st.session_state["db_initialized"] = True
+    
+
+# Initialize the metrics session at startup
+initialize_metrics_session()
+
+
+############################STYLING#######################################
+##########################################################################
+
+
+st.markdown("""
+<style>
+
+div[data-testid="stMetric"] {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+div[data-testid="stMetric"] label {
+    color: white !important;
+}
+
+div[data-testid="stMetricValue"] {
+    color: white !important;
+}
+
+div[data-testid="stMetricDelta"] {
+    color: white !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+############################MAIN LAYOUT###################################
+
+
 
 col1, col2 = st.columns([8,1])
 
 with col1:
+    
     st.title("RAG Analyzer Pro")
     st.caption("Interact with your documents using RAG Analyzer Pro and export the results")
 
+# Reset button functionality for the uploader and metrics session
 with col2:
+    
     if st.button("🔄 Reset"):
+        uploader_key = st.session_state.get("uploader_key", 0) + 1
+        
+        # Clear the current session state to reset all metrics and uploader keys
         st.session_state.clear()
+        
+        # Delete all documents and chats from the repositories db   
+        DocumentRepository.delete_all()
+        ChatRepository.delete_all()
+      
+        # Preserve the uploader key after clearing the session state
+        st.session_state["uploader_key"] = uploader_key
+        
+        # Reinitialize the metrics session after preserving the uploader key
+        initialize_metrics_session()
+        
+        # Rerun the app to apply the reset and updated uploader key
         st.rerun()
+    
+            
+get_docs=DocumentRepository.get_all()
+
+get_chats=ChatRepository.get_all()
+
+m1, m2, m3, m4 = st.columns(4)
+
+with m1:
+    st.metric(
+        "📄 Documents",
+        len(get_docs)
+    )
+
+with m2:
+    st.metric(
+        "💬 Questions",
+        len(get_chats)
+    )
+
+with m3:
+    st.metric(
+        "📦 Chunks",
+        f"{st.session_state.get('chunks', 0):,}"
+    )
+
+with m4:
+    st.metric(
+        "🤖 Model",
+        "Gemini"
+    )
+    
+st.divider()
+
 
 
 
@@ -54,22 +163,27 @@ api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
     raise KeyError("Google API key is not set.")
 
+if "uploader_key" not in st.session_state:
+    st.session_state["uploader_key"] = 0
+    
 # File uploader for various document and media types
 uploaded_files = st.file_uploader("Choose files", [".pdf", ".docx", ".csv",
                                                    ".xlsx", ".mp3", ".wav", 
                                                    ".pptx", ".mp4"],
-                                                   accept_multiple_files=True)
+                                                   accept_multiple_files=True,
+                                                   key=f"uploader_{st.session_state['uploader_key']}")
 
 print("CREATING PROCESSORS")
 processors=[]
 
 # Check if any files have been uploaded and process them accordingly
 for uploaded_file in uploaded_files:
+    
 
 
     try:
         processors.append(ProcessorFactory.
-                         create_processor(file_bytes=uploaded_file.read(), 
+                         create_processor(file_bytes=uploaded_file.getvalue(), 
                                         file_name=uploaded_file.name, 
                                         api_key=api_key))
     except ValueError as e:
@@ -93,18 +207,42 @@ if processors and len(processors) > 0:
         with st.spinner("Documents are being processed..."):
 
             
+            if "rag_engine" not in st.session_state:
 
-            # Initialize the Gemini assistant and RAG engine
-            assistant = GeminiAssistant()
+                # Initialize the Gemini assistant and RAG engine
+                assistant = GeminiAssistant()
 
-            # Create the RAG engine with the assistant
-            st.session_state["rag_engine"] = RAGEngine(assistant=assistant)
+                # Create the RAG engine with the assistant
+                st.session_state["rag_engine"] = RAGEngine(assistant=assistant)
 
             print("LOADING PROCESSORS")
 
             # Load the processors into the RAG engine and get the documents and chunks
             docs, chunks = st.session_state["rag_engine"].load_processors(processors)
-
+            st.session_state["chunks"] = chunks
+            
+            if uploaded_files:
+                uploaded=uploaded_files[0]
+                
+            file_bytes=uploaded.getvalue()
+            
+            
+            st.session_state["file_size"] = len(file_bytes)
+            
+            file_size = st.session_state["file_size"]
+            
+    
+            doc=DocData(
+                    file_name=uploaded.name,
+                    file_size=file_size,
+                    chunk_count=st.session_state.get("chunks", 0),
+                    embedding_model="text-embedding-004",
+                    status="processed"
+                )
+            
+            save_doc=DocumentRepository.save(doc)
+            
+            
             # Store the current file, documents, and chunks in the session state
             st.session_state["current_signature"] = current_signature   
             st.session_state["docs"] = docs
@@ -152,44 +290,46 @@ if "rag_engine" in st.session_state:
                 .ask(question, k=k)
             )
             
-            # Export the chat history for the current question and answer
-            ChatHistoryExporter.export(
-                question=question,
-                answer=answer,
-                metadata=[doc.metadata for doc in st.session_state["rag_engine"].last_retrieved_docs]
-            )
+            # Create a new chat entry with the question, answer, and timestamp
+            chat = ChatData(
+                    question=question,
+                    answer=answer,
+                    created_at=datetime.now()
+                )
 
+            # Save the chat entry to the repository
+            save_chat=ChatRepository.save(chat)
             
+         
             with st.chat_message("assistant"):
                 
                 # Display the answer from the RAG engine
                 st.write(answer)
 
-                # Display the sources used for the answer
-                st.write(f"📚 Sources Used ({len(st.session_state['rag_engine'].last_retrieved_docs)})")
-            
-                #
-                
-                for idx,doc in enumerate(st.session_state["rag_engine"].last_retrieved_docs,start=1):
-                    
-                    with st.expander("View Document Details"):
-                    
-                                            # Format and display the metadata for the document
-                                            meta = MetaDisplayHelper.format(doc.metadata)
-                                         
-                                            st.json(doc.metadata)
-                                            
-                                               
-                    
-                                            st.caption(
-                                                doc.page_content[:500] + "..."
-                                            )
-                    
-                                            st.divider()
+            sources = st.session_state["rag_engine"].last_retrieved_docs
 
+            with st.expander(
+                f"📚 Sources Used ({len(sources)})"
+            ):
 
+                for idx, doc in enumerate(
+                    sources[:5],
+                    start=1
+                ):
 
-                 
+                    st.markdown(
+                        f"### 📄 Source {idx}"
+                    )
+
+                    st.json(doc.metadata)
+
+                    st.caption(
+                        doc.page_content[:500] + "..."
+                    )
+
+                    st.divider()
+                  
+          
 
 else:
 
@@ -198,7 +338,7 @@ else:
     )
                        
 
-current_filename="this_file"
+current_file_name="this_file"
 if "rag_engine" in st.session_state:
     
     engine=st.session_state["rag_engine"]
@@ -206,7 +346,7 @@ if "rag_engine" in st.session_state:
     if hasattr(engine, "last_retrieved_docs") and engine.last_retrieved_docs:
         first_doc = engine.last_retrieved_docs[0]
         source = first_doc.metadata.get(f"file_name")
-        current_file_name = "this_file"
+        current_file_name = st.session_state.get("current_file_name", "this_file")
         if source:
             current_file_name = (
                 str(source).split("/")[-1].split("\\")[-1].rsplit(".", 1)[0]
@@ -215,6 +355,7 @@ if "rag_engine" in st.session_state:
         
     # Retrieve the chat history from the RAG engine
     chat_history = st.session_state["rag_engine"].get_chat_history()
+
     
     
     # Display the chat history in the chat interface
@@ -232,67 +373,54 @@ if "rag_engine" in st.session_state:
         
         st.subheader("📤 Export Chat History")
         
-        json_data=json.dumps(chat_history, indent=4,
-                              ensure_ascii=False)
+    
+        format_map = {
+            "📄 PDF": "pdf",
+            "📊 Excel": "excel",
+            "📋 JSON": "json",
+            "📝 DOCX": "docx",
+            "📑 CSV": "csv"
+        }
         
-        col1, col2, col3= st.columns(3)
+        extension_map = {
+            "pdf": "pdf",
+            "excel": "xlsx",
+            "json": "json",
+            "docx": "docx",
+            "csv": "csv"
+        }
         
-        # Export buttons for JSON, Excel, and PDF
-        
-        with col1:
-            
-            
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            st.download_button(
-                label="📋 Export JSON",
-                data=json_data,
-                file_name=f"chat_history_{current_file_name}_{current_date}.json",
-                mime="application/json"
-            )
-        # Export Excel button
-        with col2:
-            
-            
-            current_date = datetime.now().strftime("%Y-%m-%d")
-
-            excel_buffer = BytesIO()
-
-            with pd.ExcelWriter(
-                excel_buffer,
-                engine="openpyxl"
-            ) as writer:
-
-                df.to_excel(
-                    writer,
-                    sheet_name="Chat History",
-                    index=False
+        export_format = st.selectbox(
+            "📤 Export Format",
+            list(format_map.keys())
                 )
+        
+        selected_format = format_map[export_format]
+        
+         # Export the chat history for the current question and answer
+        export_chat_history = MainExporter.export(
+            format_map[export_format],
+            chat_history=chat_history,
+            doc_title=st.session_state.get("current_file_name"),
+            chunk_count=st.session_state.get("chunks"),
+            file_size=st.session_state.get("file_size")
+        )
+     
 
-            excel_buffer.seek(0)
-
-            st.download_button(
-                label="📊 Export Excel",
-                data=excel_buffer,
-                file_name=f"chat_history_{current_file_name}_{current_date}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-                        
-        # Export PDF button
-        with col3:
-            
-            # Get the current file name and date for the PDF file name
-            current_file_name = st.session_state.get("current_file_name", "chat_history")
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            
-            # Generate the PDF using the chat history
-            pdf=PdfExporter.export(chat_history)
-            st.download_button(
-                label="📄 Export PDF",
-                data=pdf,
-                file_name=f"chat_history_{current_file_name}_{current_date}.pdf",
-                mime="application/pdf"
-            )
-
+        
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        
+        st.download_button(
+            "Download",
+            data=export_chat_history,
+            file_name = (
+            f"RAG_Analysis_"
+            f"{len(uploaded_files)}_documents_"
+            f"{current_date}"
+                ) + f".{extension_map[selected_format]}" )  
+        
+        
+       
     
 
 
