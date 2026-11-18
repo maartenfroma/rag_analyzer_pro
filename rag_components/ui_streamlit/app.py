@@ -96,8 +96,15 @@ col1, col2 = st.columns([8,1])
 
 with col1:
     
-    st.title("RAG Analyzer Pro")
-    st.caption("Interact with your documents using RAG Analyzer Pro and export the results")
+        st.title("RAG Analyzer Pro")
+
+        st.caption(
+              "Enterprise document intelligence powered by RAG, semantic search and Gemini AI."
+        )
+
+        st.info(
+            "📂 Upload documents • 🔎 Analyze content • 🤖 Generate insights • 📤 Export reports"
+           )
 
 # Reset button functionality for the uploader and metrics session
 with col2:

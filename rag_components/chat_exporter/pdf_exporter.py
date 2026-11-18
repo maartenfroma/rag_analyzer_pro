@@ -13,6 +13,20 @@ from reportlab.platypus import (
 
 from datetime import datetime   
 
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.platypus import Table, TableStyle
+
+from reportlab.platypus import (
+    ListFlowable,
+    ListItem,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+)
+
+from reportlab.pdfgen import canvas
+
 # PDF Exporter class for exporting chat history to a PDF file
 # This class provides functionality to export chat history to a PDF file using ReportLab.
 class PdfExporter:
@@ -32,64 +46,120 @@ class PdfExporter:
         # Initialize the PDF document with the buffer as the output destination
         styles = getSampleStyleSheet()
         
+        styles.add(
+            ParagraphStyle(
+                name="ReportTitle",
+                parent=styles["Title"],
+                fontSize=26,
+                leading=30,
+                textColor=colors.HexColor("#1E3A8A"),
+                spaceAfter=25,
+            )
+        )
+
+        styles.add(
+            ParagraphStyle(
+                name="SectionHeader",
+                parent=styles["Heading2"],
+                fontSize=16,
+                leading=20,
+                textColor=colors.HexColor("#334155"),
+                spaceBefore=12,
+                spaceAfter=10,
+            )
+        )
+
+        styles.add(
+            ParagraphStyle(
+                name="CustomBody",
+                parent=styles["BodyText"],
+                fontSize=10,
+                leading=14,
+            )
+        )
+                
         # Initialize the list of elements to be added to the PDF document
         elements = []
         
-        # Add the title and header information to the PDF elements
         elements.append(
             Paragraph(
-                doc_title or "RAG Analyzer Pro",
-                styles["Title"]
+                "RAG Analyzer Pro",
+                styles["ReportTitle"]
+            )
+                )
+
+        elements.append(
+            Paragraph(
+                "Enterprise AI Document Intelligence Report",
+                styles["SectionHeader"]
             )
         )
 
-        # Add a spacer after the header information
         elements.append(
-            Paragraph(
-                "AI-Powered Document Analysis",
-                styles["Heading2"]
-            )
+            Spacer(1, 30)
         )
 
-        # Add the generation timestamp to the PDF elements
-        elements.append(
-            Paragraph(
-                f"Generated: {datetime.now():%d-%m-%Y %H:%M}",
-                styles["Normal"]
-            )
-        )
+        metadata_table = Table([
+                ["Generated", f"{datetime.now():%d-%m-%Y %H:%M}"],
+                ["Document", doc_title or "N/A"],
+                ["Chunks Indexed", str(chunk_count or 0)],
+                ["Questions", str(len(chat_history))],
+                ["File Size",
+                f"{round(file_size / (1024 * 1024), 2) if file_size else 0} MB"],
+            ], colWidths=[140, 300])
         
-        if doc_title:
-            
-            elements.append(
-                Paragraph(
-                    f"Document: {html.escape(str(doc_title))}",
-                    styles["Normal"]
-                )
-            )
-            
-        if chunk_count is not None:
-            elements.append(
-                Paragraph(
-                    f"Chunk Count: {chunk_count}",
-                    styles["Normal"]
-                )
-            )
-        if file_size is not None:
-            elements.append(
-                Paragraph(
-                     f"File Size: {round(file_size / (1024 * 1024), 2)} MB",
-                    styles["Normal"]
-                )
-            )
-            
-        elements.append( Paragraph(f"Questions Analyzed: {len(chat_history)}",
-                                            styles["Normal"]))
-                               
-                           
+        metadata_table.setStyle(
+                            TableStyle([
+                                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E2E8F0")),
+                                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                                ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+                                ("ROWBACKGROUNDS", (1, 0), (-1, -1),
+                                [colors.white, colors.HexColor("#F8FAFC")]),
+                            ])
+                        )
+
+        elements.append(metadata_table)
+        
         elements.append(
             Spacer(1, 20)
         )
+
+        elements.append(
+                Paragraph(
+                    "Executive Summary",
+                    styles["SectionHeader"]
+                )
+            )
+
+        elements.append(
+            Paragraph(
+                f"""
+                This report was generated using RAG Analyzer Pro and
+                contains AI-generated insights based on indexed
+                document content and semantic search retrieval.
+
+                Total questions analysed: {len(chat_history)}
+                Total chunks indexed: {chunk_count or 0}
+                """,
+                styles["CustomBody"]
+            )
+        )
+
+        elements.append(
+            Spacer(1, 20)
+        )
+
+        elements.append(
+            Paragraph(
+                "Analysis Results",
+                styles["SectionHeader"]
+            )
+        )
+
+        elements.append(
+            Spacer(1, 20)
+        )
+
 
         # Iterate over each entry in the chat history and add it to the PDF elements
         for entry in chat_history:
@@ -99,37 +169,23 @@ class PdfExporter:
             # Gebruik de juiste keys uit je RAG-engine ('query' en 'response')
             question = entry.get("query", "")
             answer = entry.get("response", "")
-            metadata = entry.get("metadata", {})
+    
 
-            # Add the question to the PDF elements if it exists
-            if question:
-                if metadata:    
-                    elements.append(
-                        Paragraph(
-                            f"Metadata: {html.escape(str(metadata))}",
-                            styles["Normal"]
-                        )
-                    )
+        
                 
-                elements.append(Paragraph( "Question", styles["Heading2"]))
+            elements.append(Paragraph( "Question", styles["SectionHeader"]))
                                                          
                 
-                elements.append(
+            elements.append(
                     Paragraph(
                         html.escape(str(question)),
-                        styles["BodyText"]
+                        styles["CustomBody"]
                     )
                 )
                 
-                if metadata:
-                    elements.append(
-                        Paragraph(
-                            f"Metadata: {html.escape(str(metadata))}",
-                            styles["Normal"]
-                        )
-                    )
+           
 
-                elements.append(
+            elements.append(
                     Spacer(1, 6)
                 )
 
@@ -140,37 +196,85 @@ class PdfExporter:
                 elements.append(
                         Paragraph(
                             "Answer",
-                            styles["Heading2"]))
+                            styles["SectionHeader"]))
                    
                 # Zet Markdown-antwoord van Gemini om naar HTML voor BeautifulSoup
                 html_answer = markdown.markdown(str(answer))
                 soup = BeautifulSoup(html_answer, "html.parser")
 
-                li_elements = soup.find_all("li")
-                if li_elements:
-                    items = [
-                        ListItem(
+
+                for tag in soup.find_all(["h1", "h2", "h3", "p", "li"]):
+                    
+                    text = html.escape(
+                                    tag.get_text(" ", strip=True)
+                                )
+
+                    if not text:
+                            continue
+                        
+                    if tag.name == "h1":
+
+                        elements.append(
                             Paragraph(
-                                html.escape(li.get_text(strip=True)),
-                                styles["BodyText"],
+                                text,
+                                styles["ReportTitle"]
                             )
                         )
-                        for li in li_elements
-                    ]
-                    elements.append(ListFlowable(items, bulletType="bullet"))
-                else:
-                    for p in soup.find_all("p"):
-                        text = html.escape(p.get_text(strip=True))
-                        if text:
-                            elements.append(Paragraph(text, styles["BodyText"]))
-                            elements.append(Spacer(1, 6))
 
-        elements.append(Spacer(1,20))
-        
-        elements.append(Paragraph( "Generated by RAG Analyzer Pro",styles["Italic"]))
+                    elif tag.name == "h2":
 
-        doc.build(elements)
+                        elements.append(
+                            Paragraph(
+                                text,
+                                styles["SectionHeader"]
+                            )
+                        )
+
+                    elif tag.name == "h3":
+
+                        elements.append(
+                            Paragraph(
+                                text,
+                                styles["Heading3"]
+                            )
+                        )
+
+                    elif tag.name == "li":
+
+                        elements.append(
+                            Paragraph(
+                                f"• {text}",
+                                styles["CustomBody"]
+                            )
+                        )
+
+                    elif tag.name == "p":
+
+                        elements.append(
+                            Paragraph(
+                                text,
+                                styles["CustomBody"]
+                            )
+                        )
+
+                    elements.append(
+                        Spacer(1, 4)
+                    )
+                    
+
+        doc.build(elements, onFirstPage=PdfExporter.add_page_number, onLaterPages=PdfExporter.add_page_number)
         pdf_buffer.seek(0)
         
         #Return the PDF buffer containing the generated PDF document
         return pdf_buffer
+    
+    @staticmethod
+    def add_page_number(canvas, doc):
+        page_num = canvas.getPageNumber()
+        canvas.setFont("Helvetica", 9)
+
+        canvas.drawRightString(
+            550,
+            20,
+            f"Page {page_num}"
+        )
