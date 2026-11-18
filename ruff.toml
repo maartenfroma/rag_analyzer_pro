@@ -1,0 +1,7 @@
+# Bestanden/mappen die Ruff overslaat
+exclude = [".venv", "__pycache__", ".git"]
+
+line-length = 100
+
+[lint]
+select = ["E", "F", "B", "UP", "SIM"]

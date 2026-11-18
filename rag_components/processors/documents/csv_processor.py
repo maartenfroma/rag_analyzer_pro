@@ -20,8 +20,12 @@ from rag_components.helpers.metadata_helper import MetadataHelper
 
 import logging
 
+from dotenv import load_dotenv
+
+
 logger = logging.getLogger(__name__)
 
+load_dotenv()
 
 class CsvProcessor(BaseDocProcessor):
     
@@ -136,7 +140,7 @@ class CsvProcessor(BaseDocProcessor):
                 )
 
             embeddings = GoogleGenerativeAIEmbeddings(
-                model="models/gemini-embedding-001",
+                model=os.getenv("EMBEDDING_MODEL"),
                 google_api_key=self.api_key,
                 task_type="retrieval_document",
             )
@@ -189,7 +193,7 @@ class CsvProcessor(BaseDocProcessor):
                 # the existing embeddings
 
                 embeddings = GoogleGenerativeAIEmbeddings(
-                    model="models/gemini-embedding-001",
+                    model=os.getenv("EMBEDDING_MODEL"), 
                     google_api_key=self.api_key,
                     task_type="retrieval_document",
                 )

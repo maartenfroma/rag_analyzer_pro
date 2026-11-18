@@ -23,6 +23,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from dotenv import load_dotenv
+load_dotenv()
+
 
 class PPTXProcessor(BaseDocProcessor):
 
@@ -134,7 +137,7 @@ class PPTXProcessor(BaseDocProcessor):
                 )
 
             embeddings = GoogleGenerativeAIEmbeddings(
-                model="models/gemini-embedding-001",
+                model=os.getenv("EMBEDDING_MODEL"),
                 google_api_key=self.api_key,
                 task_type="retrieval_document",
             )
@@ -165,7 +168,7 @@ class PPTXProcessor(BaseDocProcessor):
             if os.path.exists(self.DB_PATH):
                 logger.info("Chroma database path exists: %s", self.DB_PATH)
                 embeddings = GoogleGenerativeAIEmbeddings(
-                    model="models/gemini-embedding-001",
+                    model=os.getenv("EMBEDDING_MODEL"),
                     google_api_key=self.api_key,
                     task_type="retrieval_document",
                 )

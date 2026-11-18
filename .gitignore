@@ -1,8 +1,36 @@
+# Environment
 .env
 .env.*
+
+# Secrets
 secrets.toml
-*.toml
+
+# Virtual environments
 .venv/
+venv/
+
+# VS Code
 .vscode/
+
+# Python
 __pycache__/
 *.pyc
+
+# Streamlit
+.streamlit/
+
+# ChromaDB
+chroma_db/
+
+# Uploads
+uploads/
+
+# Exports
+exports/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

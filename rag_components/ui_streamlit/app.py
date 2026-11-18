@@ -243,7 +243,7 @@ if processors and len(processors) > 0:
                     file_name=uploaded.name,
                     file_size=file_size,
                     chunk_count=st.session_state.get("chunks", 0),
-                    embedding_model="text-embedding-004",
+                    embedding_model=os.getenv("EMBEDDING_MODEL"),
                     status="processed"
                 )
             

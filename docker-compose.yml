@@ -33,7 +33,7 @@ services:
     environment:
       POSTGRES_DB: rag_analyzer_pro
       POSTGRES_USER: rag_admin
-      POSTGRES_PASSWORD: maart123
+      POSTGRES_PASSWORD: RagPro!8xK2#Lm9Qv4@Np7Tc
 
     ports:
       - "5433:5432"

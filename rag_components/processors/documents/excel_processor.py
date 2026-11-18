@@ -20,8 +20,11 @@ from rag_components.helpers.metadata_helper import MetadataHelper
 
 import logging
 
+from dotenv import load_dotenv
+
 logger = logging.getLogger(__name__)
 
+load_dotenv()
 
 class ExcelProcessor(BaseDocProcessor):
 
@@ -130,7 +133,7 @@ class ExcelProcessor(BaseDocProcessor):
                 )
 
             embeddings = GoogleGenerativeAIEmbeddings(
-                model="models/gemini-embedding-001",
+                model=os.getenv("EMBEDDING_MODEL"),
                 google_api_key=self.api_key,
                 task_type="retrieval_document",
             )
@@ -170,7 +173,7 @@ class ExcelProcessor(BaseDocProcessor):
                 logger.info("Chroma database path exists: %s", self.DB_PATH)
 
                 embeddings = GoogleGenerativeAIEmbeddings(
-                    model="models/gemini-embedding-001",
+                    model=os.getenv("EMBEDDING_MODEL"),
                     google_api_key=self.api_key,
                     task_type="retrieval_document",
                 )
