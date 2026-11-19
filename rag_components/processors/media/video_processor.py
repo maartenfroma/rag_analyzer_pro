@@ -8,8 +8,6 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 
 from faster_whisper import WhisperModel
-from moviepy import VideoFileClip
-
 from rag_components.processors.base.base_media_processor import BaseMediaProcessor
 
 from rag_components.exceptions.document_exceptions import (
@@ -21,12 +19,34 @@ from rag_components.exceptions.document_exceptions import (
 
 from rag_components.helpers.metadata_helper import MetadataHelper
 
+import subprocess
+
 import logging
 
 logger = logging.getLogger(__name__)
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+#============================
+# Environment Variables
+#============================   
+# Load the Chroma database path from environment variables
+CHROMA_PATH = os.getenv("CHROMA_PATH")
+
+
+# Load the embedding model from environment variables
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+
+
+#============================================================
+# Video Processor Class
+#============================================================
 
 class VideoProcessor(BaseMediaProcessor):
+    
+
 
     def __init__(
         self,
@@ -52,7 +72,7 @@ class VideoProcessor(BaseMediaProcessor):
         self.chunk_overlap = chunk_overlap
         self.documents = []
         self.file_name = file_name
-        self.DB_PATH = os.path.join("chroma.sqlite3", Path(self.file_name).stem)
+        self.DB_PATH = os.path.join(CHROMA_PATH, Path(self.file_name).stem)
 
     # Load the video file from the given path or from the temporary file if no path is provided
     # file_path: Path to the video file. If None, the temporary file will be used.
@@ -75,21 +95,40 @@ class VideoProcessor(BaseMediaProcessor):
     def extract_audio(self, output_format="wav"):
 
         if not self.video_path:
-            raise ValueError("File not loaded. Call load_file() first.")
-        audio_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            
+            raise ValueError(
+                "File not loaded. Call load_file() first."
+            )
 
+        audio_temp = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=".wav"
+        )
         audio_temp.close()
 
-        video = VideoFileClip(self.video_path)
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-i",
+                self.video_path,
+                "-vn",
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                "-y",
+                audio_temp.name,
+            ],
+            capture_output=True,
+            text=True,
+        )
 
-        video.audio.write_audiofile(audio_temp.name, logger=None)
-
-        video.close()
+        if result.returncode != 0:
+            raise DocumentLoadError(result.stderr)
 
         self.audio_path = audio_temp.name
 
         return self.audio_path
-
     # Transcribe the loaded video file into text
     # Returns the transcript as a string
     # Raises ValueError if the file is not loaded or does not exist
@@ -168,19 +207,25 @@ class VideoProcessor(BaseMediaProcessor):
             )
 
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001",
+            model=EMBEDDING_MODEL,
             google_api_key=self.api_key,
             task_type="retrieval_document",
         )
+        
+        
+        db_file = os.path.join(
+        self.DB_PATH,
+        "chroma.sqlite3"
+        )
 
-        if os.path.exists(self.DB_PATH):
-            logger.info("Loading existing database file: %s", self.DB_PATH)
+        if os.path.exists(db_file):
+            logger.info("Loading existing database file: %s", db_file)
             self.vector_store = Chroma(
                 persist_directory=self.DB_PATH,
                 embedding_function=embeddings,
             )
         else:
-            logger.info("Creating new database file: %s", self.DB_PATH)
+            logger.info("Creating new database file: %s", db_file)
             self.vector_store = Chroma.from_documents(
                 documents=self.chunks,
                 embedding=embeddings,
@@ -195,11 +240,14 @@ class VideoProcessor(BaseMediaProcessor):
     def process(self):
         try:
             os.environ["GOOGLE_API_KEY"] = self.api_key
+            
+            
+            db_file = os.path.join(self.DB_PATH, "chroma.sqlite3")
 
-            if os.path.exists(self.DB_PATH):
-                logger.info("Chroma database path exists: %s", self.DB_PATH)
+            if os.path.exists(db_file):
+                logger.info("Chroma database file exists: %s", db_file)
                 embeddings = GoogleGenerativeAIEmbeddings(
-                    model="models/gemini-embedding-001",
+                    model=EMBEDDING_MODEL,
                     google_api_key=self.api_key,
                     task_type="retrieval_document",
                 )
@@ -216,15 +264,15 @@ class VideoProcessor(BaseMediaProcessor):
             self.extract_audio()
             logger.info("Extracting audio from video.")
             self.transcribe()
-            logger.info("Transcription completed successfully.")
+            logger.info("Transcription completed successfully. Transcript length: %d", len(self.transcript))
             self.create_documents()
-            logger.info("Documents created successfully.")
+            logger.info("Documents created successfully. Number of documents: %d", len(self.documents))
             self.split_documents()
-            logger.info("Documents split into chunks successfully.")
+            logger.info("Documents split into chunks successfully. Number of chunks: %d", len(self.chunks))
             self.create_vector_store()
             logger.info("Vector store created successfully.")
 
-            return self.vector_store, len(self.documents), len(self.chunks)
+            return self.vector_store, len(self.chunks), len(self.documents)
 
         except (
             DocumentLoadError,
@@ -233,10 +281,11 @@ class VideoProcessor(BaseMediaProcessor):
             DocumentSaveError,
         ) as e:
             logger.error("Error processing video file: %s", e)
-            return None
-        except Exception as e:
-            logger.error("Unexpected error processing video file: %s", e)
-            return None
+            raise 
+        
+        except Exception:
+            logger.error("Unexpected error processing video file: %s")
+            raise
 
         finally:
             if self.video_path and os.path.exists(self.video_path):

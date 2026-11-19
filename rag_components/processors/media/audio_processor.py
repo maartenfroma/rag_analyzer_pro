@@ -22,10 +22,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from dotenv import load_dotenv
+load_dotenv()
+
+# Load the Chroma database path from environment variables
+CHROMA_PATH = os.getenv("CHROMA_PATH")
+
+# Load the embedding model from environment variables
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 
 # Audio processor for handling audio files, transcription,
 # and document creation
+
+
 class AudioProcessor(BaseMediaProcessor):
+    
+    
+
 
     # Initialize the audio processor with file bytes, API key, model size, and chunk settings
     # file_bytes: The audio file content in bytes
@@ -57,7 +70,7 @@ class AudioProcessor(BaseMediaProcessor):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.documents = []
-        self.DB_PATH = os.path.join("chroma_db", Path(self.file_name).stem)
+        self.DB_PATH = os.path.join(CHROMA_PATH, Path(self.file_name).stem)
         self.segments = []
 
     # Load the audio file from the given path or from the temporary file if no path is provided
@@ -165,7 +178,7 @@ class AudioProcessor(BaseMediaProcessor):
 
         # Initialize the embeddings for the vector store
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001",
+            model=EMBEDDING_MODEL,
             google_api_key=self.api_key,
             task_type="retrieval_document",
         )
@@ -204,7 +217,7 @@ class AudioProcessor(BaseMediaProcessor):
 
                 # Load the existing vector store from the database file
                 embeddings = GoogleGenerativeAIEmbeddings(
-                    model="models/gemini-embedding-001",
+                    model=EMBEDDING_MODEL,
                     google_api_key=self.api_key,
                     task_type="retrieval_document",
                 )

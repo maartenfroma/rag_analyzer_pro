@@ -26,7 +26,15 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+    
+# Load the Chroma database path from environment variables
+CHROMA_PATH = os.getenv("CHROMA_PATH")
+
+# Load the embedding model from environment variables
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")  
+
 class ExcelProcessor(BaseDocProcessor):
+
 
     def __init__(
         self,
@@ -46,7 +54,7 @@ class ExcelProcessor(BaseDocProcessor):
         self.documents = None
         self.chunks = None
         self.vector_store = None
-        self.DB_PATH = os.path.join("chroma_db", Path(self.file_name).stem)
+        self.DB_PATH = os.path.join(CHROMA_PATH, Path(self.file_name).stem)
 
     def load_file(self):
         try:
@@ -133,7 +141,7 @@ class ExcelProcessor(BaseDocProcessor):
                 )
 
             embeddings = GoogleGenerativeAIEmbeddings(
-                model=os.getenv("EMBEDDING_MODEL"),
+                model=EMBEDDING_MODEL,
                 google_api_key=self.api_key,
                 task_type="retrieval_document",
             )
@@ -173,7 +181,7 @@ class ExcelProcessor(BaseDocProcessor):
                 logger.info("Chroma database path exists: %s", self.DB_PATH)
 
                 embeddings = GoogleGenerativeAIEmbeddings(
-                    model=os.getenv("EMBEDDING_MODEL"),
+                    model=EMBEDDING_MODEL,
                     google_api_key=self.api_key,
                     task_type="retrieval_document",
                 )

@@ -38,6 +38,11 @@ import os
 # Load environment variables from the .env file
 load_dotenv()
 
+# Maximum allowed file sizes for video and audio uploads in megabytes
+MAX_VIDEO_SIZE_MB = 500
+MAX_AUDIO_SIZE_MB = 300
+MAX_VIDEO_DURATION_MINUTES = 90
+
 
 #Set up the Streamlit page configuration and initialize the metrics session
 st.set_page_config(page_title="RAG Analyzer Pro", layout="wide")
@@ -180,6 +185,24 @@ uploaded_files = st.file_uploader("Choose files", [".pdf", ".docx", ".csv",
                                                    accept_multiple_files=True,
                                                    key=f"uploader_{st.session_state['uploader_key']}")
 
+
+for uploaded_file in uploaded_files:
+
+    file_size_mb = uploaded_file.size / (1024 * 1024)
+    extension = Path(uploaded_file.name).suffix.lower()
+
+    if extension == ".mp4" and file_size_mb > MAX_VIDEO_SIZE_MB:
+        st.error(
+            f"Video mag maximaal {MAX_VIDEO_SIZE_MB} MB zijn."
+        )
+        st.stop()
+
+    if extension in [".mp3", ".wav"] and file_size_mb > MAX_AUDIO_SIZE_MB:
+        st.error(
+            f"Audio mag maximaal {MAX_AUDIO_SIZE_MB} MB zijn."
+        )
+        st.stop()
+        
 print("CREATING PROCESSORS")
 processors=[]
 

@@ -27,7 +27,15 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+# Load the Chroma database path from environment variables
+CHROMA_PATH = os.getenv("CHROMA_PATH")  
+
+# Load the embedding model from environment variables
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+    
 class CsvProcessor(BaseDocProcessor):
+    
+
     
     MAX_ROWS = 2000
     MAX_CHUNKS = 500
@@ -51,7 +59,7 @@ class CsvProcessor(BaseDocProcessor):
         self.chunks = None
         self.vector_store = None
 
-        self.DB_PATH = os.path.join("chroma_db", Path(self.file_name).stem)
+        self.DB_PATH = os.path.join(CHROMA_PATH, Path(self.file_name).stem)
 
     def load_file(self):
         try:
@@ -95,7 +103,8 @@ class CsvProcessor(BaseDocProcessor):
                 )
 
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
+                chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap,
+                separators=["\n\n", "\n", " ", ""]
             )
             self.chunks = []
             
@@ -110,7 +119,7 @@ class CsvProcessor(BaseDocProcessor):
                         index=i,
                         chunk_index=len(self.chunks),
                     )
-                    logger.info(doc.metadata)
+                    logger.info(metadata)
                     # Append the chunk with its metadata to the list
                     # of chunks
                     
@@ -140,7 +149,7 @@ class CsvProcessor(BaseDocProcessor):
                 )
 
             embeddings = GoogleGenerativeAIEmbeddings(
-                model=os.getenv("EMBEDDING_MODEL"),
+                model=EMBEDDING_MODEL,
                 google_api_key=self.api_key,
                 task_type="retrieval_document",
             )
@@ -193,7 +202,7 @@ class CsvProcessor(BaseDocProcessor):
                 # the existing embeddings
 
                 embeddings = GoogleGenerativeAIEmbeddings(
-                    model=os.getenv("EMBEDDING_MODEL"), 
+                    model=EMBEDDING_MODEL, 
                     google_api_key=self.api_key,
                     task_type="retrieval_document",
                 )

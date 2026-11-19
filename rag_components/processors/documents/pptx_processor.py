@@ -2,7 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 from rag_components.processors.base.base_document_processor import BaseDocProcessor
-import traceback
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
@@ -26,8 +26,15 @@ logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 load_dotenv()
 
+# Load the Chroma database path from environment variables
+CHROMA_PATH = os.getenv("CHROMA_PATH")
+
+# Load the embedding model from environment variables
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 
 class PPTXProcessor(BaseDocProcessor):
+    
+
 
     def __init__(
         self,
@@ -50,7 +57,7 @@ class PPTXProcessor(BaseDocProcessor):
 
         self.file_name = file_name
 
-        self.DB_PATH = os.path.join("chroma_db", Path(self.file_name).stem)
+        self.DB_PATH = os.path.join(CHROMA_PATH, Path(self.file_name).stem)
 
     def load_file(self):
         try:
@@ -137,7 +144,7 @@ class PPTXProcessor(BaseDocProcessor):
                 )
 
             embeddings = GoogleGenerativeAIEmbeddings(
-                model=os.getenv("EMBEDDING_MODEL"),
+                model=EMBEDDING_MODEL,
                 google_api_key=self.api_key,
                 task_type="retrieval_document",
             )
@@ -168,7 +175,7 @@ class PPTXProcessor(BaseDocProcessor):
             if os.path.exists(self.DB_PATH):
                 logger.info("Chroma database path exists: %s", self.DB_PATH)
                 embeddings = GoogleGenerativeAIEmbeddings(
-                    model=os.getenv("EMBEDDING_MODEL"),
+                    model=EMBEDDING_MODEL,
                     google_api_key=self.api_key,
                     task_type="retrieval_document",
                 )
