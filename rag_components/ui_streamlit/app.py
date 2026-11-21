@@ -1,9 +1,7 @@
-from io import BytesIO
 import pandas as pd
 
 import sys
 from pathlib import Path
-import json
 
 
 # Set up the root directory for the project and add it to the system path
@@ -28,6 +26,10 @@ from rag_components.db_manager.table_manager import DBCreateTable
 
 from rag_components.helpers.initialize_metrics_session import initialize_metrics_session
 
+from rag_components.ai_assistants.prompts import QA_PROMPT, ANALYSIS_PROMPT, REPORT_PROMPT, DEEP_RESEARCH_PROMPT
+
+from rag_components.services.report_services import ResearchReportService
+
 from dotenv import load_dotenv
 
 
@@ -38,6 +40,11 @@ import os
 # Load environment variables from the .env file
 load_dotenv()
 
+#======================CONSTANTS======================
+    
+# Search modes
+SEARCH_MODES = ["Semantic", "Keyword"]
+    
 # Maximum allowed file sizes for video and audio uploads in megabytes
 MAX_VIDEO_SIZE_MB = 500
 MAX_AUDIO_SIZE_MB = 300
@@ -50,15 +57,13 @@ st.set_page_config(page_title="RAG Analyzer Pro", layout="wide")
 # Create necessary database tables if they do not exist
 DBCreateTable.create_table_documents()
 DBCreateTable.create_table_chat()
- 
-if "db_initialized" not in st.session_state:
-
-    DocumentRepository.delete_all()
-    ChatRepository.delete_all()
-
-    st.session_state["db_initialized"] = True
     
 
+# Initialize the database only once per session
+if "db_initialized" not in st.session_state:
+    
+    st.session_state["db_initialized"] = True
+    
 # Initialize the metrics session at startup
 initialize_metrics_session()
 
@@ -250,27 +255,27 @@ if processors and len(processors) > 0:
             # Load the processors into the RAG engine and get the documents and chunks
             docs, chunks = st.session_state["rag_engine"].load_processors(processors)
             st.session_state["chunks"] = chunks
-            
-            if uploaded_files:
-                uploaded=uploaded_files[0]
-                
-            file_bytes=uploaded.getvalue()
+
             
             
-            st.session_state["file_size"] = len(file_bytes)
+            for uploaded in uploaded_files:
+    
+                file_bytes=uploaded.getvalue()
             
-            file_size = st.session_state["file_size"]
+                st.session_state["file_size"] = len(file_bytes)
+            
+                file_size = st.session_state["file_size"]
             
     
-            doc=DocData(
-                    file_name=uploaded.name,
-                    file_size=file_size,
-                    chunk_count=st.session_state.get("chunks", 0),
-                    embedding_model=os.getenv("EMBEDDING_MODEL"),
-                    status="processed"
-                )
+                doc=DocData(
+                        file_name=uploaded.name,
+                        file_size=file_size,
+                        chunk_count=st.session_state.get("chunks", 0),
+                        embedding_model=os.getenv("EMBEDDING_MODEL"),
+                        status="processed"
+                    )
             
-            save_doc=DocumentRepository.save(doc)
+                save_doc=DocumentRepository.save(doc)
             
             
             # Store the current file, documents, and chunks in the session state
@@ -286,39 +291,131 @@ if "rag_engine" in st.session_state:
         "Ask a question to the RAG engine:"
     )
 
-    search_mode = st.selectbox(
-        "Analysis Mode",
-        [
-            "⚡ Fast",
-            "⚖️ Balanced",
-            "🔎 Deep Analysis"
-        ],
-        help="""
-        Fast: snel antwoord
-        Balanced: beste balans
-        Deep Analysis: meer bronnen en context
-        """
-    )
+   
+    col1, col2 = st.columns(2)
 
-    k_map = {
-        "⚡ Fast": 3,
-        "⚖️ Balanced": 10,
-        "🔎 Deep Analysis": 20,
-    }
+    with col1:
 
-    k = k_map.get(search_mode, 10)
+        analysis_mode = st.selectbox(
+            "Mode",
+            [
+                "💬 Q&A",
+                "📊 Analysis",
+                "📑 Report",
+                "🧪 Deep Research"
+            ]
+            )
 
+    with col2:
+        search_mode = st.selectbox(
+            "Search Mode",
+            [
+                "⚡ Fast",
+                "⚖️ Balanced",
+                "🔎 Deep Analysis"
+                 ]
+              )
+    # Adjust the number of documents to retrieve based on the analysis mode
+    if analysis_mode == "💬 Q&A":
+
+        k_map = {
+            "⚡ Fast": 3,
+            "⚖️ Balanced": 5,
+            "🔎 Deep Analysis": 7,
+        }
+
+    elif analysis_mode == "📊 Analysis":
+
+        k_map = {
+            "⚡ Fast": 10,
+            "⚖️ Balanced": 15,
+            "🔎 Deep Analysis": 20,
+        }
+
+    elif analysis_mode == "📑 Report":
+
+        k_map = {
+            "⚡ Fast": 10,
+            "⚖️ Balanced": 16,
+            "🔎 Deep Analysis": 20,
+        }
+
+    elif analysis_mode == "🧪 Deep Research":
+
+        k_map = {
+            "⚡ Fast": 10,
+            "⚖️ Balanced": 15,
+            "🔎 Deep Analysis": 20,
+        }
+
+
+    k = k_map.get(search_mode)
+
+    
+    
     if st.button("Submit Question") and question:
 
         with st.spinner(
             "Getting answer from RAG engine..."
         ):
+            
+            #MAKING PROMPT SELECTION BASED ON ANALYSIS MODE 
+            
+            if analysis_mode == "💬 Q&A":
+                prompt = QA_PROMPT
+                
+            elif analysis_mode == "📊 Analysis":
+                prompt = ANALYSIS_PROMPT
+                
+            elif analysis_mode == "📑 Report":
+                prompt = REPORT_PROMPT
+                
+            elif analysis_mode == "🧪 Deep Research":
+                            prompt = DEEP_RESEARCH_PROMPT
+                            
+            #===========PROMPT LOGIC==============
+                
+            # Retrieve the context for deep research mode
+            if analysis_mode == "🧪 Deep Research":   
+                
+             
+                
+                                  
+                # Get the assistant instance from the RAG engine
+                assistant=st.session_state["rag_engine"].assistant
 
-            #
-            answer, sources = (
-                st.session_state["rag_engine"]
-                .ask(question, k=k)
-            )
+                # Creates object of ResearchReportService and generates the research report based on the question and context
+                research_report = ResearchReportService(assistant)
+                
+                
+           
+                with st.status("Deep Research...", expanded=True) as status:
+                    
+                    status.write("Retrieving context...")
+                    
+                    # Retrieve the context from the RAG engine for the given question 
+                    # and number of documents to retrieve
+                    context=st.session_state["rag_engine"].retrieve_content(query=question, k=k)  
+
+                    status.write("🤖 Research engine initialiseren")
+  
+                    
+                    # Returns the generated research report as a string
+                    answer = research_report.generate_report(question=question, context=context, status=status)
+                    
+                    sources=[]
+        
+                    
+                    status.update(label="✅ Research report completed", state="complete")
+                    
+         
+                
+                
+                
+            else:
+                answer,sources = st.session_state["rag_engine"].ask(question, k=k, prompt=prompt)
+                
+            
             
             # Create a new chat entry with the question, answer, and timestamp
             chat = ChatData(
@@ -330,7 +427,7 @@ if "rag_engine" in st.session_state:
             # Save the chat entry to the repository
             save_chat=ChatRepository.save(chat)
             
-         
+            
             with st.chat_message("assistant"):
                 
                 # Display the answer from the RAG engine
@@ -358,15 +455,7 @@ if "rag_engine" in st.session_state:
                     )
 
                     st.divider()
-                  
-          
-
-else:
-
-    st.warning(
-        "Please upload a file to initialize the RAG engine."
-    )
-                       
+                    
 
 current_file_name="this_file"
 if "rag_engine" in st.session_state:
@@ -396,6 +485,8 @@ if "rag_engine" in st.session_state:
             st.write(entry['response'])
             
     if chat_history:
+        
+        st.write(f"Chat history length: {len(chat_history)}")
         
         df=pd.DataFrame(chat_history)
         
@@ -427,32 +518,28 @@ if "rag_engine" in st.session_state:
         
         selected_format = format_map[export_format]
         
+   
          # Export the chat history for the current question and answer
         export_chat_history = MainExporter.export(
-            format_map[export_format],
+            selected_format,
             chat_history=chat_history,
             doc_title=st.session_state.get("current_file_name"),
             chunk_count=st.session_state.get("chunks"),
             file_size=st.session_state.get("file_size")
+        
         )
+      
      
 
-        
+            
         current_date = datetime.now().strftime("%Y-%m-%d")
-        
+            
+            
         st.download_button(
             "Download",
             data=export_chat_history,
-            file_name = (
-            f"RAG_Analysis_"
-            f"{len(uploaded_files)}_documents_"
-            f"{current_date}"
-                ) + f".{extension_map[selected_format]}" )  
-        
-        
-       
-    
-
+            file_name=f"{st.session_state.get('current_file_name')}_{current_date}.{extension_map[selected_format]}"
+        )
 
 
 

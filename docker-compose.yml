@@ -36,7 +36,7 @@ services:
       POSTGRES_PASSWORD: RagPro!8xK2#Lm9Qv4@Np7Tc
 
     ports:
-      - "5433:5432"
+      - "5434:5432"
       
 
     volumes:

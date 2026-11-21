@@ -80,12 +80,22 @@ class RAGEngine:
     # Retrieve content from the vector store based on a query
     def retrieve_content(self, query: str, k: int = 10) -> str:
 
+        # Check if the vector stores have been initialized before attempting retrieval
         if not self.vector_stores:
             raise VectorStoreError("Vector store is not loaded.")
+        
+        # Attempt to retrieve similar documents from each vector store
         try:
+            
+            # Initialize an empty list to store retrieved documents
             documents = []
+            
+            # Iterate over each vector store and perform similarity search
             for vs in self.vector_stores:
+                # Perform similarity search on the current vector store
                 docs = vs.similarity_search(query=query, k=k)
+                # Log the number of documents retrieved from the current vector store
+                logger.info("Retrieved %d documents from vector store", len(docs))
                 documents.extend(docs)
         except Exception as e:
             logger.error("Error during similarity search: %s", e)
@@ -93,23 +103,31 @@ class RAGEngine:
                 "Failed to retrieve content from vector store."
             ) from e
 
+        # Process the retrieved documents to remove duplicates and extract context information
         try:
+            
+            # Initialize a list to store unique documents and a set to track seen content
             unique_docs = []
             seen = set()
 
             context_parts = []
+           
 
+            # Iterate over each retrieved document and extract context information
             for doc in documents:
                 logger.info("Metadata for document: %s", doc.metadata)
 
+                # Skip documents that have already been seen to avoid duplicates    
                 if doc.page_content not in seen:
                     unique_docs.append(doc)
                     seen.add(doc.page_content)
 
                     source = doc.metadata.get("file_name", "unknown")
 
+                    # Extract the source file name from the document metadata
                     meta = []
 
+                    # Collect metadata information for the current document
                     if "page" in doc.metadata:
                         meta.append(f"Page: {doc.metadata['page']}")
                     if "table" in doc.metadata:
@@ -130,10 +148,13 @@ class RAGEngine:
                     if "index" in doc.metadata:
                         meta.append(f"Index: {doc.metadata['index']}")
 
+                    # Get the page number for reference, defaulting to "?" if not available
                     page = doc.metadata.get("page", "?")
 
+                    # Combine the metadata information into a single string for context 
                     meta_info = " | ".join(meta)
 
+                    # Append the context information for the current document to the context parts list
                     context_parts.append(
                         f"Document: {source}"
                         f"{' | ' + meta_info if meta_info else ''}\n"
@@ -150,20 +171,33 @@ class RAGEngine:
             logger.error("Error during context generation: %s", e)
             raise ContextGenerationError("Failed to generate context.") from e
 
+        # Return the generated context for the retrieved documents
+        # Return type is a string containing the combined context for all retrieved documents
         return context
 
     def ask(
-        self, query: str, k: int = 4, enable_serp: bool = False
+        self, query: str, k: int = 4, prompt: str | None = None, enable_serp: bool = False
     ) -> tuple[str, list[str]]:
 
         # Ask a question to the RAG engine and get a response based on retrieved context
         # Retrieve the context from the vector store based on the query
         context: str = self.retrieve_content(query, k=k)
-
+        
+        final_query = query
+        
+        if prompt:
+            final_query = f"""{prompt}
+            
+            Question:
+            
+            {query}"""
+            
+            
+            
         print("Retrieved context:\n", context)
 
         answer, sources = self.assistant.ask_with_context(
-            query=query, context=context, enable_serp=enable_serp
+            query=final_query, context=context, enable_serp=enable_serp
         )
 
         # Append the query, answer, sources, and context to the chat history for reference
