@@ -1,3 +1,5 @@
+from turtle import title
+
 from rag_components.ai_assistants.gemini_ai_assistant import GeminiAssistant
 
 
@@ -76,6 +78,9 @@ class ResearchReportService:
         
     # Generate the full research report based on the question and context
     def generate_report(self, question: str, context: str, status=None) -> str:
+        
+        if status:
+            status.write(f"📖 Generating chapter: {title}")
         
         outline = self.generate_outline(question, context, status=status)
         
