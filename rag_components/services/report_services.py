@@ -1,5 +1,3 @@
-from turtle import title
-
 from rag_components.ai_assistants.gemini_ai_assistant import GeminiAssistant
 
 
