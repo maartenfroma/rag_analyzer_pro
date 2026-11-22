@@ -78,7 +78,7 @@ class ResearchReportService:
     def generate_report(self, question: str, context: str, status=None) -> str:
         
         if status:
-            status.write(f"📖 Generating chapter: {title}")
+            status.write(f"📖 Generating outline ...")
         
         outline = self.generate_outline(question, context, status=status)
         
